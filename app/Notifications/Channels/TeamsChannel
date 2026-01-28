@@ -1,0 +1,22 @@
+<?php
+
+namespace App\Notifications\Channels;
+
+use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Http;
+
+class TeamsChannel
+{
+    public function send($notifiable, Notification $notification)
+    {
+        $webhookUrl = $notifiable->routeNotificationFor('teams');
+
+        if (! $webhookUrl) {
+            return;
+        }
+
+        $message = $notification->toTeams($notifiable);
+
+        return Http::post($webhookUrl, $message);
+    }
+}

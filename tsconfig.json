@@ -1,0 +1,43 @@
+{
+    "compilerOptions": {
+        "target": "ESNext", // or "ES2022", based on your compatibility needs
+        "esModuleInterop": true,
+        "lib": ["dom", "es2015"], // Specify the libraries you need
+        "jsx": "react-jsx", // Use the new JSX transform
+        "module": "ESNext", // Use ES modules
+        "skipLibCheck": true, // Skip type checking of declaration files
+        "moduleResolution": "Bundler", // Use bundler resolution strategy
+        "allowImportingTsExtensions": true, // Allow importing .ts files without specifying .ts extension
+        "isolatedModules": true, // Ensure each file can be transpiled independently
+        "moduleDetection": "force", // Detect modules in .ts/.tsx files
+        "noEmit": true, // Do not emit output
+        "strict": true, // Enable all strict type-checking options
+        "noUnusedLocals": true, // Report errors on unused locals
+        "noUnusedParameters": true, // Report errors on unused parameters
+        "noFallthroughCasesInSwitch": true, // Report fallthrough cases in switch statements
+        "noUncheckedSideEffectImports": true, // Prevent imports that have side effects
+        // "baseUrl": ".", // Set base URL for module resolution
+        "baseUrl": "./resources/js/src",
+        "resolveJsonModule": true,
+        "types": ["vite/client", "node"],
+        "paths": {
+            "@/*": ["./resources/js/*"],
+            "@components/*": ["components/*"],
+            "@constants/*": ["components/Constants/*"],
+            "@CustomComponents/*": ["components/CustomComponents/*"],
+            "ziggy-js": ["./vendor/tightenco/ziggy"]
+        }
+    },
+    // "include": ["src/**/*"], // Include all files in the src directory
+    "include": [
+        "**/*.ts",
+        "**/*.tsx",
+        "resources/js/**/*.ts",
+        "resources/js/**/*.tsx",
+        "resources/js/**/*.d.ts"
+        //   "src/views/auth/resetPassword",
+        // "server/server.cjs"
+    ], // Include all files in the src directory
+
+    "exclude": ["node_modules"] // Exclude node_modules
+}
