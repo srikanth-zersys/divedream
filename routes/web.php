@@ -7,7 +7,8 @@ use App\Http\Controllers\Admin\InstructorController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\MemberController;
 use App\Http\Controllers\Admin\ProductController;
-use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\ReportsController;
+use App\Http\Controllers\PortalController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\DashboardController;
@@ -40,11 +41,14 @@ Route::prefix('book')->name('public.book.')->group(function () {
 });
 
 // Customer portal
-Route::prefix('portal')->name('portal.')->group(function () {
-    Route::get('/', [PublicBookingController::class, 'portal'])->name('index');
-    Route::get('/booking/{booking}', [PublicBookingController::class, 'viewBooking'])->name('booking');
-    Route::post('/booking/{booking}/waiver', [PublicBookingController::class, 'signWaiver'])->name('sign-waiver');
-    Route::post('/booking/{booking}/medical', [PublicBookingController::class, 'submitMedical'])->name('submit-medical');
+Route::prefix('portal')->name('portal.')->middleware('auth')->group(function () {
+    Route::get('/', [PortalController::class, 'dashboard'])->name('index');
+    Route::get('/bookings', [PortalController::class, 'bookings'])->name('bookings');
+    Route::get('/booking/{booking}', [PortalController::class, 'booking'])->name('booking');
+    Route::get('/profile', [PortalController::class, 'profile'])->name('profile');
+    Route::put('/profile', [PortalController::class, 'updateProfile'])->name('profile.update');
+    Route::post('/booking/{booking}/waiver', [PortalController::class, 'signWaiver'])->name('sign-waiver');
+    Route::post('/booking/{booking}/cancel', [PortalController::class, 'cancelBooking'])->name('cancel-booking');
 });
 
 // Default route - redirect to login
@@ -159,12 +163,12 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
 
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {
-        Route::get('/', [ReportController::class, 'index'])->name('index');
-        Route::get('/revenue', [ReportController::class, 'revenue'])->name('revenue');
-        Route::get('/bookings', [ReportController::class, 'bookings'])->name('bookings');
-        Route::get('/members', [ReportController::class, 'members'])->name('members');
-        Route::get('/instructors', [ReportController::class, 'instructors'])->name('instructors');
-        Route::get('/equipment', [ReportController::class, 'equipment'])->name('equipment');
+        Route::get('/', [ReportsController::class, 'index'])->name('index');
+        Route::get('/revenue', [ReportsController::class, 'revenue'])->name('revenue');
+        Route::get('/bookings', [ReportsController::class, 'bookings'])->name('bookings');
+        Route::get('/members', [ReportsController::class, 'members'])->name('members');
+        Route::get('/instructors', [ReportsController::class, 'instructors'])->name('instructors');
+        Route::get('/equipment', [ReportsController::class, 'equipment'])->name('equipment');
     });
 
     // Settings
