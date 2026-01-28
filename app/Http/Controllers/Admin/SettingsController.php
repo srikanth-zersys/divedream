@@ -262,6 +262,87 @@ class SettingsController extends Controller
         return redirect()->back()->with('success', 'Payment settings updated successfully.');
     }
 
+    public function integrations()
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+        $settings = $tenant->settings ?? [];
+
+        return Inertia::render('admin/settings/integrations', [
+            'integrations' => array_merge([
+                'google_calendar_enabled' => false,
+                'mailchimp_enabled' => false,
+                'quickbooks_enabled' => false,
+                'zapier_enabled' => false,
+            ], $settings['integrations'] ?? []),
+        ]);
+    }
+
+    public function billing()
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        return Inertia::render('admin/settings/billing', [
+            'tenant' => $tenant,
+            'subscription' => $tenant->subscription ?? null,
+            'invoices' => [], // Would come from Stripe
+        ]);
+    }
+
+    public function team()
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        $users = \App\Models\User::where('tenant_id', $tenant->id)
+            ->with('roles')
+            ->get();
+
+        return Inertia::render('admin/settings/team', [
+            'users' => $users,
+            'roles' => \Spatie\Permission\Models\Role::all(),
+        ]);
+    }
+
+    public function inviteTeamMember(Request $request)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        $validated = $request->validate([
+            'email' => 'required|email|unique:users,email',
+            'name' => 'required|string|max:255',
+            'role' => 'required|exists:roles,name',
+        ]);
+
+        $user = \App\Models\User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => bcrypt(\Str::random(16)),
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $user->assignRole($validated['role']);
+
+        // TODO: Send invitation email
+
+        return redirect()->back()->with('success', 'Team member invited successfully.');
+    }
+
+    public function removeTeamMember(\App\Models\User $user)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        if ($user->tenant_id !== $tenant->id) {
+            abort(403, 'Unauthorized.');
+        }
+
+        if ($user->id === auth()->id()) {
+            return redirect()->back()->with('error', 'You cannot remove yourself.');
+        }
+
+        $user->delete();
+
+        return redirect()->back()->with('success', 'Team member removed successfully.');
+    }
+
     protected function getCurrencies(): array
     {
         return [

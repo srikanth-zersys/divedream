@@ -213,6 +213,119 @@ class ReportsController extends Controller
         ]);
     }
 
+    public function bookings(Request $request)
+    {
+        $locationId = $this->tenantService->getCurrentLocation()?->id;
+        $period = $request->input('period', '30d');
+
+        [$startDate, $endDate] = $this->getPeriodDates($period);
+
+        $bookings = Booking::where('location_id', $locationId)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->with(['product', 'member', 'schedule'])
+            ->orderByDesc('created_at')
+            ->paginate(20);
+
+        $summary = [
+            'total' => Booking::where('location_id', $locationId)
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->count(),
+            'byStatus' => Booking::where('location_id', $locationId)
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->selectRaw('status, count(*) as count')
+                ->groupBy('status')
+                ->get(),
+            'byProduct' => Booking::where('location_id', $locationId)
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->selectRaw('product_id, count(*) as count')
+                ->groupBy('product_id')
+                ->with('product:id,name')
+                ->get(),
+        ];
+
+        return Inertia::render('admin/reports/bookings', [
+            'bookings' => $bookings,
+            'summary' => $summary,
+            'period' => $period,
+            'filters' => $request->only(['period']),
+        ]);
+    }
+
+    public function members(Request $request)
+    {
+        $locationId = $this->tenantService->getCurrentLocation()?->id;
+        $period = $request->input('period', '30d');
+
+        [$startDate, $endDate] = $this->getPeriodDates($period);
+
+        $members = Member::where('location_id', $locationId)
+            ->withCount(['bookings', 'certifications'])
+            ->withSum('bookings', 'total_amount')
+            ->orderByDesc('bookings_count')
+            ->paginate(20);
+
+        $summary = [
+            'total' => Member::where('location_id', $locationId)->count(),
+            'newThisPeriod' => Member::where('location_id', $locationId)
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->count(),
+            'topSpenders' => Member::where('location_id', $locationId)
+                ->withSum('bookings', 'total_amount')
+                ->orderByDesc('bookings_sum_total_amount')
+                ->limit(10)
+                ->get(),
+        ];
+
+        return Inertia::render('admin/reports/members', [
+            'members' => $members,
+            'summary' => $summary,
+            'period' => $period,
+            'filters' => $request->only(['period']),
+        ]);
+    }
+
+    public function instructors(Request $request)
+    {
+        $locationId = $this->tenantService->getCurrentLocation()?->id;
+        $period = $request->input('period', '30d');
+
+        [$startDate, $endDate] = $this->getPeriodDates($period);
+
+        $instructors = \App\Models\Instructor::where('location_id', $locationId)
+            ->with('user')
+            ->withCount(['schedules' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+            }])
+            ->get();
+
+        return Inertia::render('admin/reports/instructors', [
+            'instructors' => $instructors,
+            'period' => $period,
+            'filters' => $request->only(['period']),
+        ]);
+    }
+
+    public function equipment(Request $request)
+    {
+        $locationId = $this->tenantService->getCurrentLocation()?->id;
+
+        $equipment = \App\Models\Equipment::where('location_id', $locationId)
+            ->with('category')
+            ->get()
+            ->groupBy('status');
+
+        $maintenanceDue = \App\Models\Equipment::where('location_id', $locationId)
+            ->where('next_maintenance_date', '<=', now()->addDays(30))
+            ->with('category')
+            ->get();
+
+        return Inertia::render('admin/reports/equipment', [
+            'equipment' => $equipment,
+            'maintenanceDue' => $maintenanceDue,
+            'filters' => $request->only(['period']),
+        ]);
+    }
+
     protected function getPeriodDates(string $period): array
     {
         $endDate = Carbon::now();
