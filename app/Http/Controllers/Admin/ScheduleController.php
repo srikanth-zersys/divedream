@@ -472,4 +472,60 @@ class ScheduleController extends Controller
 
         return back()->with('success', 'Instructor assigned successfully.');
     }
+
+    /**
+     * Reschedule a schedule via drag-drop calendar
+     */
+    public function reschedule(Request $request, Schedule $schedule)
+    {
+        $this->authorize('update', $schedule);
+
+        $validated = $request->validate([
+            'new_start' => 'required|date',
+            'new_end' => 'nullable|date|after:new_start',
+            'notify_customers' => 'boolean',
+        ]);
+
+        $oldDate = $schedule->date;
+        $oldStartTime = $schedule->start_time;
+        $oldEndTime = $schedule->end_time;
+
+        // Parse new datetime
+        $newStart = Carbon::parse($validated['new_start']);
+        $newEnd = $validated['new_end'] ? Carbon::parse($validated['new_end']) : null;
+
+        // Update schedule
+        $schedule->update([
+            'date' => $newStart->toDateString(),
+            'start_time' => $newStart->format('H:i:s'),
+            'end_time' => $newEnd ? $newEnd->format('H:i:s') : $schedule->end_time,
+        ]);
+
+        // Notify customers if requested
+        if ($validated['notify_customers'] ?? true) {
+            $bookings = $schedule->bookings()->with('member')->get();
+
+            foreach ($bookings as $booking) {
+                // Queue schedule change notification
+                if ($booking->member && $booking->member->email) {
+                    \Mail::to($booking->member->email)->queue(
+                        new \App\Mail\ScheduleChanged($booking, [
+                            'old_date' => $oldDate,
+                            'old_start_time' => $oldStartTime,
+                            'old_end_time' => $oldEndTime,
+                            'new_date' => $schedule->date,
+                            'new_start_time' => $schedule->start_time,
+                            'new_end_time' => $schedule->end_time,
+                        ])
+                    );
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Schedule updated successfully.',
+            'schedule' => $schedule->fresh(),
+        ]);
+    }
 }

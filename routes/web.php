@@ -196,6 +196,7 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
         Route::post('/{schedule}/cancel', [ScheduleController::class, 'cancel'])->name('cancel');
         Route::post('/{schedule}/duplicate', [ScheduleController::class, 'duplicate'])->name('duplicate');
         Route::post('/{schedule}/assign-instructor', [ScheduleController::class, 'assignInstructor'])->name('assign-instructor');
+        Route::post('/{schedule}/reschedule', [ScheduleController::class, 'reschedule'])->name('reschedule');
     });
 
     // Members

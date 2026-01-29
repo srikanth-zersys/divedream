@@ -15,6 +15,7 @@ import { LAYOUT_LANGUAGES, } from './components/Constants/layout';
 import { initialState } from './slices/layout/reducer';
 import { getPreviousThemeData } from './slices/layout/utils';
 import { changeDarkModeClass, changeDataColor, changeDirection, changeLayout, changeLayoutContentWidth, changeLayoutLanguage, changeLayoutMode, changeModernNavigation, changeSidebarColor, changeSidebarSize } from './slices/thunk';
+import { I18nProvider } from './i18n';
 
 const appName = process.env.APP_NAME;
 
@@ -62,8 +63,10 @@ createInertiaApp({
 
         root.render(
             <Provider store={store}>
-                <ThemeInitializer />
-                <App {...props} />
+                <I18nProvider>
+                    <ThemeInitializer />
+                    <App {...props} />
+                </I18nProvider>
             </Provider>
         );
     },

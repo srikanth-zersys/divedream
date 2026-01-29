@@ -17,7 +17,12 @@ import {
   User,
   Eye,
   DollarSign,
+  GripVertical,
+  AlertTriangle,
+  Check,
+  Loader2,
 } from 'lucide-react';
+import { toast } from '@/components/ui/Toast';
 
 interface CalendarEvent {
   id: string;
@@ -37,11 +42,23 @@ interface Props {
   events: CalendarEvent[];
 }
 
+interface RescheduleInfo {
+  event: CalendarEvent;
+  oldStart: string;
+  oldEnd: string;
+  newStart: string;
+  newEnd: string;
+  revert: () => void;
+}
+
 const BookingsCalendar: React.FC<Props> = ({ events }) => {
   const calendarRef = useRef<FullCalendar>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [currentView, setCurrentView] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('timeGridWeek');
+  const [rescheduleInfo, setRescheduleInfo] = useState<RescheduleInfo | null>(null);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
 
   const handleEventClick = (info: any) => {
     setSelectedEvent({
@@ -57,6 +74,93 @@ const BookingsCalendar: React.FC<Props> = ({ events }) => {
 
   const handleDateClick = (info: any) => {
     router.get('/admin/bookings/create', { date: info.dateStr });
+  };
+
+  // Handle drag-drop event
+  const handleEventDrop = (info: any) => {
+    const event = info.event;
+    setRescheduleInfo({
+      event: {
+        id: event.id,
+        title: event.title,
+        start: info.oldEvent.startStr,
+        end: info.oldEvent.endStr,
+        color: event.backgroundColor,
+        extendedProps: event.extendedProps,
+      },
+      oldStart: info.oldEvent.startStr,
+      oldEnd: info.oldEvent.endStr,
+      newStart: event.startStr,
+      newEnd: event.endStr,
+      revert: info.revert,
+    });
+    setShowRescheduleModal(true);
+  };
+
+  // Handle event resize
+  const handleEventResize = (info: any) => {
+    const event = info.event;
+    setRescheduleInfo({
+      event: {
+        id: event.id,
+        title: event.title,
+        start: info.oldEvent.startStr,
+        end: info.oldEvent.endStr,
+        color: event.backgroundColor,
+        extendedProps: event.extendedProps,
+      },
+      oldStart: info.oldEvent.startStr,
+      oldEnd: info.oldEvent.endStr,
+      newStart: event.startStr,
+      newEnd: event.endStr,
+      revert: info.revert,
+    });
+    setShowRescheduleModal(true);
+  };
+
+  // Confirm reschedule
+  const confirmReschedule = async () => {
+    if (!rescheduleInfo) return;
+
+    setIsRescheduling(true);
+    try {
+      const response = await fetch(`/admin/schedules/${rescheduleInfo.event.id}/reschedule`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          new_start: rescheduleInfo.newStart,
+          new_end: rescheduleInfo.newEnd,
+          notify_customers: true,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success('Schedule Updated', 'The schedule has been rescheduled and customers notified.');
+        setShowRescheduleModal(false);
+        setRescheduleInfo(null);
+      } else {
+        throw new Error(result.message || 'Failed to reschedule');
+      }
+    } catch (error: any) {
+      toast.error('Reschedule Failed', error.message || 'Unable to reschedule this event.');
+      rescheduleInfo.revert();
+    } finally {
+      setIsRescheduling(false);
+    }
+  };
+
+  // Cancel reschedule
+  const cancelReschedule = () => {
+    if (rescheduleInfo) {
+      rescheduleInfo.revert();
+    }
+    setShowRescheduleModal(false);
+    setRescheduleInfo(null);
   };
 
   const goToToday = () => {
@@ -183,12 +287,17 @@ const BookingsCalendar: React.FC<Props> = ({ events }) => {
               events={events}
               eventClick={handleEventClick}
               dateClick={handleDateClick}
+              eventDrop={handleEventDrop}
+              eventResize={handleEventResize}
+              editable={true}
+              droppable={true}
               headerToolbar={false}
               height="auto"
               slotMinTime="06:00:00"
               slotMaxTime="21:00:00"
               allDaySlot={false}
               nowIndicator={true}
+              snapDuration="00:15:00"
               eventTimeFormat={{
                 hour: 'numeric',
                 minute: '2-digit',
@@ -205,9 +314,12 @@ const BookingsCalendar: React.FC<Props> = ({ events }) => {
                 day: 'numeric',
               }}
               eventContent={(eventInfo) => (
-                <div className="p-1 overflow-hidden">
-                  <div className="font-medium text-xs truncate">{eventInfo.event.title}</div>
-                  <div className="text-xs opacity-80 flex items-center gap-1">
+                <div className="p-1 overflow-hidden group cursor-move">
+                  <div className="flex items-center gap-1">
+                    <GripVertical className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity flex-shrink-0" />
+                    <div className="font-medium text-xs truncate">{eventInfo.event.title}</div>
+                  </div>
+                  <div className="text-xs opacity-80 flex items-center gap-1 ml-4">
                     <Users className="w-3 h-3" />
                     {eventInfo.event.extendedProps.booked}/{eventInfo.event.extendedProps.capacity}
                   </div>
@@ -337,6 +449,107 @@ const BookingsCalendar: React.FC<Props> = ({ events }) => {
                   <Users className="w-4 h-4" />
                   View Bookings
                 </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Confirmation Modal */}
+      {showRescheduleModal && rescheduleInfo && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={cancelReschedule} />
+            <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+              <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Confirm Reschedule
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    This will notify all booked customers
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="font-medium text-gray-900 dark:text-white">
+                  {rescheduleInfo.event.title}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                    <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">From</p>
+                    <p className="text-sm text-red-800 dark:text-red-300">
+                      {new Date(rescheduleInfo.oldStart).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
+                    <p className="text-sm text-red-800 dark:text-red-300">
+                      {new Date(rescheduleInfo.oldStart).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-1">To</p>
+                    <p className="text-sm text-green-800 dark:text-green-300">
+                      {new Date(rescheduleInfo.newStart).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
+                    <p className="text-sm text-green-800 dark:text-green-300">
+                      {new Date(rescheduleInfo.newStart).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                </div>
+
+                {rescheduleInfo.event.extendedProps.booked > 0 && (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm text-blue-800 dark:text-blue-300">
+                      {rescheduleInfo.event.extendedProps.booked} customer(s) will be notified via email
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={cancelReschedule}
+                  disabled={isRescheduling}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmReschedule}
+                  disabled={isRescheduling}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {isRescheduling ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Confirm Reschedule
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
