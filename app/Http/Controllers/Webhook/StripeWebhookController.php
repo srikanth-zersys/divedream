@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Webhook;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Services\NotificationService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -14,7 +15,8 @@ use Stripe\Webhook;
 class StripeWebhookController extends Controller
 {
     public function __construct(
-        protected SubscriptionService $subscriptionService
+        protected SubscriptionService $subscriptionService,
+        protected NotificationService $notificationService
     ) {}
 
     public function handle(Request $request)
@@ -108,7 +110,9 @@ class StripeWebhookController extends Controller
             'amount' => $payment->amount,
         ]);
 
-        // TODO: Send confirmation email
+        // Send confirmation email and payment receipt
+        $this->notificationService->sendBookingConfirmation($booking);
+        $this->notificationService->sendPaymentReceipt($payment);
 
         return response('Payment recorded', 200);
     }

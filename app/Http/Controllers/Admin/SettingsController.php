@@ -443,6 +443,115 @@ class SettingsController extends Controller
         }
     }
 
+    public function email()
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+        $settings = $tenant->settings ?? [];
+        $emailSettings = $settings['email'] ?? [];
+
+        return Inertia::render('admin/settings/email', [
+            'settings' => array_merge([
+                'mail_driver' => 'smtp',
+                'mail_host' => '',
+                'mail_port' => 587,
+                'mail_username' => '',
+                'mail_password' => '',
+                'mail_encryption' => 'tls',
+                'mail_from_address' => '',
+                'mail_from_name' => $tenant->name ?? '',
+                'mail_reply_to' => '',
+            ], $emailSettings),
+            'connectionStatus' => $emailSettings['connection_status'] ?? 'unknown',
+            'lastTestAt' => $emailSettings['last_test_at'] ?? null,
+        ]);
+    }
+
+    public function updateEmail(Request $request)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        $validated = $request->validate([
+            'mail_driver' => 'required|string|in:smtp,mailgun,ses,postmark,sendgrid',
+            'mail_host' => 'required_if:mail_driver,smtp|nullable|string|max:255',
+            'mail_port' => 'required_if:mail_driver,smtp|nullable|integer|min:1|max:65535',
+            'mail_username' => 'nullable|string|max:255',
+            'mail_password' => 'nullable|string|max:255',
+            'mail_encryption' => 'nullable|string|in:tls,ssl,none',
+            'mail_from_address' => 'required|email|max:255',
+            'mail_from_name' => 'required|string|max:255',
+            'mail_reply_to' => 'nullable|email|max:255',
+        ]);
+
+        $settings = $tenant->settings ?? [];
+        $settings['email'] = array_merge($settings['email'] ?? [], $validated);
+        $tenant->update(['settings' => $settings]);
+
+        return redirect()->back()->with('success', 'Email settings updated successfully.');
+    }
+
+    public function testEmail(Request $request)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        $validated = $request->validate([
+            'mail_host' => 'required_if:mail_driver,smtp|nullable|string',
+            'mail_port' => 'required_if:mail_driver,smtp|nullable|integer',
+            'mail_username' => 'nullable|string',
+            'mail_password' => 'nullable|string',
+            'mail_encryption' => 'nullable|string',
+            'mail_from_address' => 'required|email',
+            'mail_from_name' => 'required|string',
+        ]);
+
+        try {
+            // Temporarily configure mail settings
+            config([
+                'mail.mailers.smtp.host' => $validated['mail_host'],
+                'mail.mailers.smtp.port' => $validated['mail_port'],
+                'mail.mailers.smtp.username' => $validated['mail_username'],
+                'mail.mailers.smtp.password' => $validated['mail_password'],
+                'mail.mailers.smtp.encryption' => $validated['mail_encryption'] === 'none' ? null : $validated['mail_encryption'],
+                'mail.from.address' => $validated['mail_from_address'],
+                'mail.from.name' => $validated['mail_from_name'],
+            ]);
+
+            // Send test email
+            \Mail::raw(
+                "This is a test email from {$tenant->name}.\n\nIf you received this, your email settings are configured correctly.",
+                function ($message) use ($validated) {
+                    $message->to($validated['mail_from_address'])
+                        ->subject('Test Email - Email Settings Verified');
+                }
+            );
+
+            // Update connection status
+            $settings = $tenant->settings ?? [];
+            $settings['email'] = array_merge($settings['email'] ?? [], [
+                'connection_status' => 'connected',
+                'last_test_at' => now()->toISOString(),
+            ]);
+            $tenant->update(['settings' => $settings]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Test email sent successfully! Check your inbox.',
+            ]);
+        } catch (\Exception $e) {
+            // Update connection status
+            $settings = $tenant->settings ?? [];
+            $settings['email'] = array_merge($settings['email'] ?? [], [
+                'connection_status' => 'failed',
+                'last_test_at' => now()->toISOString(),
+            ]);
+            $tenant->update(['settings' => $settings]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send test email: ' . $e->getMessage(),
+            ], 422);
+        }
+    }
+
     protected function getCurrencies(): array
     {
         return [

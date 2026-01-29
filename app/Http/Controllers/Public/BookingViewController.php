@@ -168,15 +168,76 @@ class BookingViewController extends Controller
      */
     public function payBalance(Request $request, string $token): RedirectResponse
     {
-        $booking = Booking::where('access_token', $token)->firstOrFail();
+        $booking = Booking::where('access_token', $token)
+            ->with(['member', 'tenant', 'product'])
+            ->firstOrFail();
 
         if (!$booking->needsPayment()) {
             return back()->with('info', 'This booking is already fully paid.');
         }
 
-        // Redirect to Stripe checkout for remaining balance
-        // For now, just return a message
-        return back()->with('info', 'Online payment for balance coming soon. Please contact us to complete payment.');
+        // Check if Stripe is configured
+        if (!config('services.stripe.secret')) {
+            return back()->with('info', 'Online payments are not currently available. Please contact us to complete payment.');
+        }
+
+        try {
+            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+            $tenant = $booking->tenant;
+            $member = $booking->member;
+
+            // Get or create Stripe customer
+            $customerId = $member->stripe_customer_id;
+
+            if (!$customerId) {
+                $customer = $stripe->customers->create([
+                    'email' => $member->email,
+                    'name' => $member->full_name,
+                    'phone' => $member->phone,
+                    'metadata' => [
+                        'member_id' => $member->id,
+                        'tenant_id' => $tenant->id,
+                    ],
+                ]);
+                $member->update(['stripe_customer_id' => $customer->id]);
+                $customerId = $customer->id;
+            }
+
+            // Create Stripe Checkout Session for the remaining balance
+            $session = $stripe->checkout->sessions->create([
+                'customer' => $customerId,
+                'payment_method_types' => ['card'],
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => strtolower($booking->currency ?? 'usd'),
+                        'product_data' => [
+                            'name' => "Balance Payment - Booking #{$booking->booking_number}",
+                            'description' => $booking->product?->name ?? 'Dive booking',
+                        ],
+                        'unit_amount' => (int) ($booking->balance_due * 100),
+                    ],
+                    'quantity' => 1,
+                ]],
+                'mode' => 'payment',
+                'success_url' => url("/booking/{$token}") . '?payment=success',
+                'cancel_url' => url("/booking/{$token}") . '?payment=cancelled',
+                'metadata' => [
+                    'booking_id' => $booking->id,
+                    'booking_number' => $booking->booking_number,
+                    'tenant_id' => $tenant->id,
+                ],
+            ]);
+
+            return redirect()->away($session->url);
+
+        } catch (\Exception $e) {
+            \Log::error('Stripe payment error', [
+                'booking_id' => $booking->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Unable to process payment at this time. Please try again or contact us directly.');
+        }
     }
 
     /**

@@ -125,7 +125,7 @@
                 </div>
 
                 <div class="cta">
-                    <a href="{{ url('/portal/booking/' . $booking->id) }}" class="btn">
+                    <a href="{{ url('/booking/' . $booking->access_token) }}" class="btn">
                         Manage Your Booking
                     </a>
                 </div>

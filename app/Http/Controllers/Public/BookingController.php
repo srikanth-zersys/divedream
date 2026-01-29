@@ -9,6 +9,7 @@ use App\Models\DiscountCode;
 use App\Models\Member;
 use App\Models\Product;
 use App\Models\Schedule;
+use App\Services\NotificationService;
 use App\Services\TenantService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +20,8 @@ use Inertia\Response;
 class BookingController extends Controller
 {
     public function __construct(
-        protected TenantService $tenantService
+        protected TenantService $tenantService,
+        protected NotificationService $notificationService
     ) {}
 
     /**
@@ -529,7 +531,9 @@ class BookingController extends Controller
                 return $booking;
             });
 
-            // TODO: Integrate with Stripe for payment
+            // Send booking confirmation email
+            $this->notificationService->sendBookingConfirmation($booking);
+            $this->notificationService->notifyStaffNewBooking($booking);
 
             $successMessage = $booking->payment_method === 'at_shop'
                 ? 'Booking confirmed! Please pay at the dive shop before your activity.'
