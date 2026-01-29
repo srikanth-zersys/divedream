@@ -35,6 +35,7 @@ class Booking extends Model
         'total_amount',
         'currency',
         'payment_status',
+        'payment_method',
         'amount_paid',
         'amount_refunded',
         'balance_due',

@@ -315,6 +315,8 @@ class BookingController extends Controller
             'participants.*.name' => 'required|string|max:255',
             'participants.*.email' => 'nullable|email|max:255',
             'participants.*.certification_level' => 'nullable|string|max:100',
+            // Payment method - allows pay at shop
+            'payment_method' => 'nullable|in:online,at_shop',
             // Options
             'special_requests' => 'nullable|string|max:1000',
             'marketing_consent' => 'boolean',
@@ -377,7 +379,29 @@ class BookingController extends Controller
                 $tax = round($subtotal * ($taxRate / 100), 2);
                 $total = $subtotal + $tax;
 
-                // Create booking with expiration for unpaid bookings (30 min to complete payment)
+                // Determine payment method and expiration
+                // Industry best practice: Allow pay-at-shop, only expire online payment bookings
+                $paymentMethod = $validated['payment_method'] ?? 'at_shop';
+                $requiresOnlinePayment = $tenant->require_online_payment ?? false;
+
+                // If tenant requires online payment but customer chose at_shop, override
+                if ($requiresOnlinePayment && !$tenant->allow_pay_at_shop) {
+                    $paymentMethod = 'online';
+                }
+
+                // Set payment due date based on method and tenant settings
+                // - Online payments: configurable expiration (default 24 hours)
+                // - Pay at shop: due at check-in (booking date), no auto-cancel
+                $paymentDueDate = null;
+                if ($paymentMethod === 'online') {
+                    $expirationHours = $tenant->online_payment_expiration_hours ?? 24;
+                    $paymentDueDate = now()->addHours($expirationHours);
+                } else {
+                    // Pay at shop - payment due on booking date (at check-in)
+                    $paymentDueDate = $schedule->date;
+                }
+
+                // Create booking
                 $booking = Booking::create([
                     'tenant_id' => $tenant->id,
                     'location_id' => $schedule->location_id,
@@ -395,11 +419,14 @@ class BookingController extends Controller
                     'currency' => $tenant->currency ?? 'USD',
                     'amount_paid' => 0,
                     'balance_due' => $total,
-                    'payment_due_date' => now()->addMinutes(30), // Booking expires if unpaid
+                    'payment_method' => $paymentMethod,
+                    'payment_due_date' => $paymentDueDate,
                     'special_requests' => $validated['special_requests'] ?? null,
                     'source' => 'website',
-                    'status' => 'pending',
+                    // Pay at shop bookings are confirmed immediately (subject to review)
+                    'status' => $paymentMethod === 'at_shop' ? 'confirmed' : 'pending',
                     'payment_status' => 'unpaid',
+                    'confirmed_at' => $paymentMethod === 'at_shop' ? now() : null,
                 ]);
 
                 // Create primary participant
@@ -429,11 +456,14 @@ class BookingController extends Controller
             });
 
             // TODO: Integrate with Stripe for payment
-            // For now, redirect to confirmation
+
+            $successMessage = $booking->payment_method === 'at_shop'
+                ? 'Booking confirmed! Please pay at the dive shop before your activity.'
+                : 'Booking created! Please complete payment to confirm your reservation.';
 
             return redirect()
                 ->route('public.book.confirmation', $booking)
-                ->with('success', 'Booking created successfully! Please complete payment within 30 minutes.');
+                ->with('success', $successMessage);
 
         } catch (\Exception $e) {
             return back()
