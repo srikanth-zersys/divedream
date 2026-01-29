@@ -31,12 +31,17 @@ class Booking extends Model
         'subtotal',
         'discount_amount',
         'discount_code',
+        'online_discount_enabled',
+        'online_discount_percent',
+        'online_discount_amount',
         'tax_amount',
         'total_amount',
         'currency',
         'payment_status',
         'payment_method',
         'amount_paid',
+        'deposit_amount',
+        'deposit_paid_at',
         'amount_refunded',
         'balance_due',
         'payment_due_date',
@@ -61,9 +66,14 @@ class Booking extends Model
         'participants' => 'array',
         'subtotal' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'online_discount_enabled' => 'boolean',
+        'online_discount_percent' => 'decimal:2',
+        'online_discount_amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'amount_paid' => 'decimal:2',
+        'deposit_amount' => 'decimal:2',
+        'deposit_paid_at' => 'datetime',
         'amount_refunded' => 'decimal:2',
         'balance_due' => 'decimal:2',
         'payment_due_date' => 'datetime',
@@ -152,6 +162,11 @@ class Booking extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function bookingPayments(): HasMany
+    {
+        return $this->hasMany(BookingPayment::class);
     }
 
     // Scopes
@@ -337,5 +352,115 @@ class Booking extends Model
         $time = $this->booking_time ?? $this->schedule?->start_time ?? '00:00';
 
         return $this->booking_date->setTimeFromTimeString($time);
+    }
+
+    /**
+     * Recalculate payment totals from all completed payments
+     */
+    public function recalculatePayments(): void
+    {
+        $completedPayments = $this->bookingPayments()->completed()->get();
+
+        $totalPaid = $completedPayments->where('type', '!=', 'refund')->sum('amount');
+        $totalRefunded = $completedPayments->where('type', 'refund')->sum('amount');
+        $balance = $this->total_amount - $totalPaid + $totalRefunded;
+
+        // Check if deposit was paid
+        $depositPaid = $completedPayments->where('type', 'deposit')->first();
+
+        $this->update([
+            'amount_paid' => $totalPaid,
+            'amount_refunded' => $totalRefunded,
+            'balance_due' => max(0, $balance),
+            'deposit_paid_at' => $depositPaid?->paid_at,
+            'payment_status' => $this->determinePaymentStatus($totalPaid, $totalRefunded),
+        ]);
+    }
+
+    /**
+     * Determine payment status based on amounts
+     */
+    protected function determinePaymentStatus(float $paid, float $refunded): string
+    {
+        $net = $paid - $refunded;
+
+        if ($net <= 0) {
+            return 'unpaid';
+        }
+
+        if ($net >= $this->total_amount) {
+            return 'fully_paid';
+        }
+
+        // Check if only deposit was paid
+        if ($this->deposit_amount > 0 && $net >= $this->deposit_amount && $net < $this->total_amount) {
+            return 'deposit_paid';
+        }
+
+        return 'partially_paid';
+    }
+
+    /**
+     * Record a payment for this booking
+     */
+    public function recordPayment(
+        float $amount,
+        string $type = 'partial',
+        string $method = 'cash',
+        ?int $receivedBy = null,
+        ?string $notes = null
+    ): BookingPayment {
+        $payment = $this->bookingPayments()->create([
+            'tenant_id' => $this->tenant_id,
+            'amount' => $amount,
+            'currency' => $this->currency ?? 'USD',
+            'type' => $type,
+            'method' => $method,
+            'status' => 'completed',
+            'received_by' => $receivedBy ?? auth()->id(),
+            'notes' => $notes,
+            'paid_at' => now(),
+        ]);
+
+        $this->recalculatePayments();
+
+        return $payment;
+    }
+
+    /**
+     * Record deposit payment
+     */
+    public function recordDeposit(
+        float $amount,
+        string $method = 'cash',
+        ?int $receivedBy = null
+    ): BookingPayment {
+        $this->update(['deposit_amount' => $amount]);
+
+        return $this->recordPayment($amount, 'deposit', $method, $receivedBy);
+    }
+
+    /**
+     * Check if deposit has been paid
+     */
+    public function hasDepositPaid(): bool
+    {
+        return $this->deposit_paid_at !== null;
+    }
+
+    /**
+     * Check if fully paid
+     */
+    public function isFullyPaid(): bool
+    {
+        return $this->payment_status === 'fully_paid';
+    }
+
+    /**
+     * Get remaining balance
+     */
+    public function getRemainingBalance(): float
+    {
+        return max(0, $this->total_amount - $this->amount_paid + $this->amount_refunded);
     }
 }
