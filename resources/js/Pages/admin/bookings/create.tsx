@@ -47,7 +47,12 @@ const CreateBooking: React.FC<Props> = ({ products, schedules, members }) => {
     setAvailableSchedules(filtered);
   };
 
+  const MAX_PARTICIPANTS = 20; // Reasonable upper limit for a single booking
+
   const handleAddParticipant = () => {
+    if (data.participants.length >= MAX_PARTICIPANTS) {
+      return; // Prevent adding more than maximum
+    }
     setData('participants', [...data.participants, { name: '', email: '', phone: '' }]);
   };
 
@@ -209,6 +214,7 @@ const CreateBooking: React.FC<Props> = ({ products, schedules, members }) => {
                   type="date"
                   value={data.booking_date}
                   onChange={(e) => setData('booking_date', e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
                   required
                 />
@@ -238,10 +244,11 @@ const CreateBooking: React.FC<Props> = ({ products, schedules, members }) => {
               <button
                 type="button"
                 onClick={handleAddParticipant}
-                className="inline-flex items-center gap-2 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                disabled={data.participants.length >= MAX_PARTICIPANTS}
+                className="inline-flex items-center gap-2 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4" />
-                Add Participant
+                Add Participant {data.participants.length >= MAX_PARTICIPANTS && `(Max ${MAX_PARTICIPANTS})`}
               </button>
             </div>
             <div className="space-y-4">

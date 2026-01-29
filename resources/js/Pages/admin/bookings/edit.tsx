@@ -146,10 +146,15 @@ const BookingEdit: React.FC<Props> = ({ booking, schedules, statuses }) => {
                 <input
                   type="number"
                   min="1"
+                  max="20"
                   value={data.participant_count}
-                  onChange={(e) => setData('participant_count', parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const value = Math.min(20, Math.max(1, parseInt(e.target.value) || 1));
+                    setData('participant_count', value);
+                  }}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
+                <p className="mt-1 text-xs text-gray-500">Maximum 20 participants per booking</p>
                 {errors.participant_count && <p className="mt-1 text-sm text-red-500">{errors.participant_count}</p>}
               </div>
 

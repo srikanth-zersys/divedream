@@ -496,9 +496,18 @@ const Checkout: React.FC<Props> = ({
                       <input
                         type="tel"
                         value={data.phone}
-                        onChange={(e) => setData('phone', e.target.value)}
+                        onChange={(e) => {
+                          // Allow only digits, spaces, dashes, parentheses, and plus sign
+                          const sanitized = e.target.value.replace(/[^\d\s\-\(\)\+]/g, '');
+                          setData('phone', sanitized);
+                        }}
+                        pattern="[\d\s\-\(\)\+]{7,20}"
+                        placeholder="+1 (555) 123-4567"
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
+                      {errors.phone && (
+                        <p className="mt-1 text-sm text-red-500">{errors.phone}</p>
+                      )}
                     </div>
                   </div>
                 </div>

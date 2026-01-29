@@ -184,11 +184,45 @@ class ScheduleController extends Controller
         $tenant = $this->tenantService->getCurrentTenant();
         $location = $this->tenantService->getCurrentLocation();
 
+        // Security: Validate entities belong to current tenant
+        $tenantId = $tenant->id;
         $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'instructor_id' => 'nullable|exists:instructors,id',
-            'boat_id' => 'nullable|exists:boats,id',
-            'dive_site_id' => 'nullable|exists:dive_sites,id',
+            'product_id' => [
+                'required',
+                'exists:products,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if (!Product::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected product is invalid.');
+                    }
+                },
+            ],
+            'instructor_id' => [
+                'nullable',
+                'exists:instructors,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value && !Instructor::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected instructor is invalid.');
+                    }
+                },
+            ],
+            'boat_id' => [
+                'nullable',
+                'exists:boats,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value && !Boat::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected boat is invalid.');
+                    }
+                },
+            ],
+            'dive_site_id' => [
+                'nullable',
+                'exists:dive_sites,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value && !DiveSite::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected dive site is invalid.');
+                    }
+                },
+            ],
             'date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'nullable|date_format:H:i|after:start_time',
@@ -373,11 +407,45 @@ class ScheduleController extends Controller
     {
         $this->authorize('update', $schedule);
 
+        // Security: Validate entities belong to current tenant
+        $tenantId = $schedule->tenant_id;
         $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'instructor_id' => 'nullable|exists:instructors,id',
-            'boat_id' => 'nullable|exists:boats,id',
-            'dive_site_id' => 'nullable|exists:dive_sites,id',
+            'product_id' => [
+                'required',
+                'exists:products,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if (!Product::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected product is invalid.');
+                    }
+                },
+            ],
+            'instructor_id' => [
+                'nullable',
+                'exists:instructors,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value && !Instructor::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected instructor is invalid.');
+                    }
+                },
+            ],
+            'boat_id' => [
+                'nullable',
+                'exists:boats,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value && !Boat::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected boat is invalid.');
+                    }
+                },
+            ],
+            'dive_site_id' => [
+                'nullable',
+                'exists:dive_sites,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value && !DiveSite::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected dive site is invalid.');
+                    }
+                },
+            ],
             'date' => 'required|date',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'nullable|date_format:H:i|after:start_time',
@@ -436,14 +504,26 @@ class ScheduleController extends Controller
             'cancellation_reason' => $validated['cancellation_reason'],
         ]);
 
-        // Cancel associated bookings
+        // Cancel associated bookings and send notifications
+        $notifiedCount = 0;
         foreach ($schedule->bookings as $booking) {
             $booking->cancel($validated['cancellation_reason'], auth()->id());
+
+            // Send notification if requested
+            if (($validated['notify_customers'] ?? true) && $booking->member?->email) {
+                \Mail::to($booking->member->email)->queue(
+                    new \App\Mail\BookingCancellation($booking, $validated['cancellation_reason'])
+                );
+                $notifiedCount++;
+            }
         }
 
-        // TODO: Send notifications if requested
+        $message = 'Schedule cancelled successfully.';
+        if ($notifiedCount > 0) {
+            $message .= " {$notifiedCount} customer(s) have been notified.";
+        }
 
-        return back()->with('success', 'Schedule cancelled successfully.');
+        return back()->with('success', $message);
     }
 
     public function duplicate(Schedule $schedule): RedirectResponse
@@ -464,8 +544,18 @@ class ScheduleController extends Controller
     {
         $this->authorize('update', $schedule);
 
+        // Security: Validate instructor belongs to current tenant
+        $tenantId = $schedule->tenant_id;
         $validated = $request->validate([
-            'instructor_id' => 'nullable|exists:instructors,id',
+            'instructor_id' => [
+                'nullable',
+                'exists:instructors,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value && !Instructor::where('id', $value)->where('tenant_id', $tenantId)->exists()) {
+                        $fail('The selected instructor is invalid.');
+                    }
+                },
+            ],
         ]);
 
         $schedule->update(['instructor_id' => $validated['instructor_id']]);

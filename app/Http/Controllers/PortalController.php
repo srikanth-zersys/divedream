@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\Member;
+use App\Services\RefundService;
 use App\Services\TenantService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -11,7 +12,8 @@ use Inertia\Inertia;
 class PortalController extends Controller
 {
     public function __construct(
-        protected TenantService $tenantService
+        protected TenantService $tenantService,
+        protected RefundService $refundService
     ) {}
 
     public function dashboard(Request $request)
@@ -238,16 +240,24 @@ class PortalController extends Controller
             return redirect()->back()->with('error', 'Cancellation window has passed.');
         }
 
-        $booking->update([
-            'status' => 'cancelled',
-            'cancelled_at' => now(),
-            'cancelled_by' => $member->id,
-            'cancellation_reason' => $request->input('reason', 'Customer requested cancellation'),
-        ]);
+        // Process cancellation with automatic refund calculation
+        $reason = $request->input('reason', 'Customer requested cancellation');
+        $result = $this->refundService->processCancellation(
+            $booking,
+            $reason,
+            $member->id
+        );
 
-        // TODO: Process refund if applicable
+        // Build response message with refund info
+        $message = 'Booking cancelled successfully.';
+        if ($result['refund_info']['refund_amount'] > 0) {
+            $refundAmount = number_format($result['refund_info']['refund_amount'], 2);
+            $message .= " A refund of \${$refundAmount} will be processed to your original payment method.";
+        } elseif ($result['refund_info']['refund_percent'] === 0 && $booking->amount_paid > 0) {
+            $message .= ' Per our cancellation policy, no refund is available for this cancellation.';
+        }
 
-        return redirect()->back()->with('success', 'Booking cancelled successfully.');
+        return redirect()->back()->with('success', $message);
     }
 
     protected function getCurrentMember(Request $request): ?Member

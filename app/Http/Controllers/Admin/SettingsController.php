@@ -336,18 +336,24 @@ class SettingsController extends Controller
             'role' => 'required|exists:roles,name',
         ]);
 
+        // Generate a temporary password
+        $tempPassword = \Str::random(16);
+
         $user = \App\Models\User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'password' => bcrypt(\Str::random(16)),
+            'password' => bcrypt($tempPassword),
             'tenant_id' => $tenant->id,
         ]);
 
         $user->assignRole($validated['role']);
 
-        // TODO: Send invitation email
+        // Send invitation email
+        \Mail::to($user->email)->queue(
+            new \App\Mail\TeamInvitation($user, $tenant, $validated['role'], $tempPassword)
+        );
 
-        return redirect()->back()->with('success', 'Team member invited successfully.');
+        return redirect()->back()->with('success', 'Team member invited successfully. An invitation email has been sent.');
     }
 
     public function removeTeamMember(\App\Models\User $user)
