@@ -245,6 +245,7 @@ class ScheduleController extends Controller
             $days = $validated['recurring_days'] ?? [];
 
             $currentDate = $startDate->copy();
+            $weekCounter = 0; // Track weeks for biweekly pattern
 
             while ($currentDate->lte($endDate)) {
                 $shouldCreate = false;
@@ -254,8 +255,11 @@ class ScheduleController extends Controller
                         $shouldCreate = true;
                         break;
                     case 'weekly':
-                    case 'biweekly':
                         $shouldCreate = in_array($currentDate->dayOfWeek, $days);
+                        break;
+                    case 'biweekly':
+                        // Only create on selected days during odd weeks (0, 2, 4...)
+                        $shouldCreate = in_array($currentDate->dayOfWeek, $days) && ($weekCounter % 2 === 0);
                         break;
                     case 'monthly':
                         $shouldCreate = $currentDate->day === $startDate->day;
@@ -268,7 +272,9 @@ class ScheduleController extends Controller
                     ]));
                 }
 
-                // Move to next date
+                // Move to next date and track week changes
+                $previousWeek = $currentDate->weekOfYear;
+
                 switch ($pattern) {
                     case 'daily':
                         $currentDate->addDay();
@@ -278,8 +284,9 @@ class ScheduleController extends Controller
                         break;
                     case 'biweekly':
                         $currentDate->addDay();
-                        if ($currentDate->dayOfWeek === $startDate->dayOfWeek) {
-                            $currentDate->addWeek();
+                        // Increment week counter when we move to a new week
+                        if ($currentDate->weekOfYear !== $previousWeek) {
+                            $weekCounter++;
                         }
                         break;
                     case 'monthly':

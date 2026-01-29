@@ -6,7 +6,9 @@ use App\Http\Controllers\Admin\EquipmentController;
 use App\Http\Controllers\Admin\InstructorController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\MemberController;
+use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\QuoteController;
 use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\PortalController;
 use App\Http\Controllers\Admin\ScheduleController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\BookingController as PublicBookingController;
+use App\Http\Controllers\Public\QuoteViewController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +41,15 @@ Route::prefix('book')->name('public.book.')->group(function () {
     Route::get('/checkout', [PublicBookingController::class, 'checkout'])->name('checkout');
     Route::post('/checkout', [PublicBookingController::class, 'processCheckout'])->name('process-checkout');
     Route::get('/confirmation/{booking}', [PublicBookingController::class, 'confirmation'])->name('confirmation');
+});
+
+// Public quote viewing (for customers receiving quote emails)
+Route::prefix('quote')->name('quotes.')->group(function () {
+    Route::get('/{token}', [QuoteViewController::class, 'show'])->name('public');
+    Route::post('/{token}/accept', [QuoteViewController::class, 'accept'])->name('accept');
+    Route::post('/{token}/reject', [QuoteViewController::class, 'reject'])->name('reject');
+    Route::post('/{token}/request-changes', [QuoteViewController::class, 'requestChanges'])->name('request-changes');
+    Route::get('/{token}/download', [QuoteViewController::class, 'download'])->name('download');
 });
 
 // Customer portal
@@ -78,6 +90,25 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
         Route::post('/{booking}/check-in', [BookingController::class, 'checkIn'])->name('check-in');
         Route::post('/{booking}/check-out', [BookingController::class, 'checkOut'])->name('check-out');
         Route::post('/{booking}/cancel', [BookingController::class, 'cancel'])->name('cancel');
+        // Payment recording
+        Route::post('/{booking}/payments', [PaymentController::class, 'store'])->name('payments.store');
+        Route::post('/{booking}/quick-pay', [PaymentController::class, 'quickPay'])->name('quick-pay');
+        Route::post('/{booking}/record-deposit', [PaymentController::class, 'recordDeposit'])->name('record-deposit');
+    });
+
+    // Quotes/Proposals
+    Route::prefix('quotes')->name('quotes.')->group(function () {
+        Route::get('/', [QuoteController::class, 'index'])->name('index');
+        Route::get('/create', [QuoteController::class, 'create'])->name('create');
+        Route::post('/', [QuoteController::class, 'store'])->name('store');
+        Route::get('/{quote}', [QuoteController::class, 'show'])->name('show');
+        Route::get('/{quote}/edit', [QuoteController::class, 'edit'])->name('edit');
+        Route::put('/{quote}', [QuoteController::class, 'update'])->name('update');
+        Route::delete('/{quote}', [QuoteController::class, 'destroy'])->name('destroy');
+        Route::post('/{quote}/send', [QuoteController::class, 'send'])->name('send');
+        Route::post('/{quote}/resend', [QuoteController::class, 'resend'])->name('resend');
+        Route::post('/{quote}/convert', [QuoteController::class, 'convert'])->name('convert');
+        Route::post('/{quote}/duplicate', [QuoteController::class, 'duplicate'])->name('duplicate');
     });
 
     // Schedules
