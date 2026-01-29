@@ -19,6 +19,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\BookingController as PublicBookingController;
 use App\Http\Controllers\Public\CartRecoveryController;
 use App\Http\Controllers\Public\QuoteViewController;
+use App\Http\Controllers\Public\BookingViewController;
 use App\Http\Controllers\Public\LeadCaptureController;
 use App\Http\Controllers\Public\PaymentController as PublicPaymentController;
 use App\Http\Controllers\Public\ReferralController;
@@ -70,6 +71,15 @@ Route::prefix('quote')->name('quotes.')->group(function () {
     Route::post('/{token}/reject', [QuoteViewController::class, 'reject'])->name('reject');
     Route::post('/{token}/request-changes', [QuoteViewController::class, 'requestChanges'])->name('request-changes');
     Route::get('/{token}/download', [QuoteViewController::class, 'download'])->name('download');
+});
+
+// Public booking viewing (magic link access for customers)
+Route::prefix('booking')->name('booking.')->group(function () {
+    Route::get('/{token}', [BookingViewController::class, 'show'])->name('view');
+    Route::post('/{token}/waiver', [BookingViewController::class, 'signWaiver'])->name('sign-waiver');
+    Route::post('/{token}/cancel', [BookingViewController::class, 'cancel'])->name('cancel');
+    Route::post('/{token}/pay', [BookingViewController::class, 'payBalance'])->name('pay');
+    Route::post('/{token}/note', [BookingViewController::class, 'addNote'])->name('add-note');
 });
 
 // Review collection (post-trip feedback)
@@ -288,6 +298,11 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
         Route::put('/booking', [SettingsController::class, 'updateBooking'])->name('update-booking');
         Route::get('/notifications', [SettingsController::class, 'notifications'])->name('notifications');
         Route::put('/notifications', [SettingsController::class, 'updateNotifications'])->name('update-notifications');
+        Route::get('/payments', [SettingsController::class, 'payments'])->name('payments');
+        Route::put('/payments', [SettingsController::class, 'updatePayments'])->name('update-payments');
+        Route::get('/email', [SettingsController::class, 'email'])->name('email');
+        Route::put('/email', [SettingsController::class, 'updateEmail'])->name('update-email');
+        Route::post('/email/test', [SettingsController::class, 'testEmail'])->name('email.test');
         Route::get('/integrations', [SettingsController::class, 'integrations'])->name('integrations');
         Route::get('/billing', [SettingsController::class, 'billing'])->name('billing');
         Route::post('/billing/change-plan', [SettingsController::class, 'changePlan'])->name('billing.change-plan');

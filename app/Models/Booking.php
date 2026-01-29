@@ -17,6 +17,7 @@ class Booking extends Model
         'tenant_id',
         'location_id',
         'booking_number',
+        'access_token',
         'source',
         'member_id',
         'customer_name',
@@ -94,6 +95,9 @@ class Booking extends Model
         static::creating(function ($booking) {
             if (!$booking->booking_number) {
                 $booking->booking_number = self::generateBookingNumber();
+            }
+            if (!$booking->access_token) {
+                $booking->access_token = Str::random(64);
             }
         });
     }
@@ -352,6 +356,22 @@ class Booking extends Model
         $time = $this->booking_time ?? $this->schedule?->start_time ?? '00:00';
 
         return $this->booking_date->setTimeFromTimeString($time);
+    }
+
+    /**
+     * Get the public URL for customer access via magic link
+     */
+    public function getPublicUrl(): string
+    {
+        return url("/booking/{$this->access_token}");
+    }
+
+    /**
+     * Find booking by access token
+     */
+    public static function findByToken(string $token): ?self
+    {
+        return static::where('access_token', $token)->first();
     }
 
     /**

@@ -2,7 +2,6 @@ import React from 'react';
 import { Head, Link } from '@inertiajs/react';
 import Layout from '@/layout/Layout';
 import {
-  Settings,
   Building2,
   Palette,
   Calendar,
@@ -11,7 +10,6 @@ import {
   Shield,
   Users,
   Mail,
-  Globe,
   ChevronRight,
 } from 'lucide-react';
 
@@ -80,13 +78,6 @@ const SettingsIndex: React.FC = () => {
       href: '/admin/settings/email',
       icon: <Mail className="w-6 h-6" />,
       color: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
-    },
-    {
-      title: 'Website & SEO',
-      description: 'Public website settings, meta tags, and social links',
-      href: '/admin/settings/website',
-      icon: <Globe className="w-6 h-6" />,
-      color: 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
     },
   ];
 
