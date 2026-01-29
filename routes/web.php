@@ -13,14 +13,17 @@ use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\PortalController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\WaiverController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\BookingController as PublicBookingController;
 use App\Http\Controllers\Public\CartRecoveryController;
 use App\Http\Controllers\Public\QuoteViewController;
 use App\Http\Controllers\Public\LeadCaptureController;
+use App\Http\Controllers\Public\PaymentController as PublicPaymentController;
 use App\Http\Controllers\Public\ReferralController;
 use App\Http\Controllers\Public\ReviewController;
+use App\Http\Controllers\Webhook\StripeWebhookController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +38,11 @@ use Spatie\Health\Http\Controllers\HealthCheckResultsController;
 // Health check
 Route::get('health', HealthCheckResultsController::class);
 
+// Stripe webhooks (no CSRF, signature verified)
+Route::post('/webhook/stripe', [StripeWebhookController::class, 'handle'])
+    ->name('webhook.stripe')
+    ->withoutMiddleware(['web']);
+
 // Public booking pages
 Route::prefix('book')->name('public.book.')->group(function () {
     Route::get('/', [PublicBookingController::class, 'index'])->name('index');
@@ -45,6 +53,13 @@ Route::prefix('book')->name('public.book.')->group(function () {
     Route::get('/checkout', [PublicBookingController::class, 'checkout'])->name('checkout');
     Route::post('/checkout', [PublicBookingController::class, 'processCheckout'])->name('process-checkout');
     Route::get('/confirmation/{booking}', [PublicBookingController::class, 'confirmation'])->name('confirmation');
+});
+
+// Payment API (for Stripe integration)
+Route::prefix('payment')->name('public.payment.')->group(function () {
+    Route::get('/config', [PublicPaymentController::class, 'getPublishableKey'])->name('config');
+    Route::post('/create-intent', [PublicPaymentController::class, 'createCheckoutPaymentIntent'])->name('create-intent');
+    Route::post('/booking-intent', [PublicPaymentController::class, 'createPaymentIntent'])->name('booking-intent');
 });
 
 // Public quote viewing (for customers receiving quote emails)
@@ -238,6 +253,19 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
     Route::post('/switch-location', [LocationController::class, 'switchLocation'])->name('switch-location');
     Route::get('/select-location', [LocationController::class, 'selectLocation'])->name('location.select');
 
+    // Waivers & Documents
+    Route::prefix('waivers')->name('waivers.')->group(function () {
+        Route::get('/', [WaiverController::class, 'index'])->name('index');
+        Route::get('/create', [WaiverController::class, 'create'])->name('create');
+        Route::post('/', [WaiverController::class, 'store'])->name('store');
+        Route::get('/{waiver}', [WaiverController::class, 'show'])->name('show');
+        Route::get('/{waiver}/edit', [WaiverController::class, 'edit'])->name('edit');
+        Route::put('/{waiver}', [WaiverController::class, 'update'])->name('update');
+        Route::delete('/{waiver}', [WaiverController::class, 'destroy'])->name('destroy');
+        Route::post('/{waiver}/duplicate', [WaiverController::class, 'duplicate'])->name('duplicate');
+        Route::get('/{waiver}/preview', [WaiverController::class, 'preview'])->name('preview');
+    });
+
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [ReportsController::class, 'index'])->name('index');
@@ -261,6 +289,10 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
         Route::put('/notifications', [SettingsController::class, 'updateNotifications'])->name('update-notifications');
         Route::get('/integrations', [SettingsController::class, 'integrations'])->name('integrations');
         Route::get('/billing', [SettingsController::class, 'billing'])->name('billing');
+        Route::post('/billing/change-plan', [SettingsController::class, 'changePlan'])->name('billing.change-plan');
+        Route::post('/billing/cancel', [SettingsController::class, 'cancelSubscription'])->name('billing.cancel');
+        Route::post('/billing/resume', [SettingsController::class, 'resumeSubscription'])->name('billing.resume');
+        Route::get('/billing/portal', [SettingsController::class, 'billingPortal'])->name('billing.portal');
         Route::get('/team', [SettingsController::class, 'team'])->name('team');
         Route::post('/team/invite', [SettingsController::class, 'inviteTeamMember'])->name('team.invite');
         Route::delete('/team/{user}', [SettingsController::class, 'removeTeamMember'])->name('team.remove');

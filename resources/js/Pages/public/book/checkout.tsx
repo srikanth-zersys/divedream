@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, Link, useForm, router } from '@inertiajs/react';
 import {
   Calendar,
@@ -13,8 +13,17 @@ import {
   Plus,
   Minus,
   User,
+  Wallet,
+  Loader2,
 } from 'lucide-react';
 import { Schedule } from '@/types/dive-club';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
 
 interface Props {
   schedule: Schedule;
@@ -27,6 +36,8 @@ interface Props {
   };
   requiresWaiver: boolean;
   requiresMedical: boolean;
+  stripeKey?: string;
+  allowPayAtShop?: boolean;
 }
 
 interface ParticipantInfo {
@@ -35,17 +46,84 @@ interface ParticipantInfo {
   certification_level: string;
 }
 
+// Stripe Payment Form Component
+const StripePaymentForm: React.FC<{
+  onSuccess: (paymentIntentId: string) => void;
+  onError: (error: string) => void;
+  processing: boolean;
+  setProcessing: (val: boolean) => void;
+}> = ({ onSuccess, onError, processing, setProcessing }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const handlePayment = async () => {
+    if (!stripe || !elements) {
+      return;
+    }
+
+    setProcessing(true);
+
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: window.location.origin + '/book/confirmation',
+      },
+      redirect: 'if_required',
+    });
+
+    if (error) {
+      onError(error.message || 'Payment failed');
+      setProcessing(false);
+    } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+      onSuccess(paymentIntent.id);
+    } else {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <PaymentElement />
+      <button
+        type="button"
+        onClick={handlePayment}
+        disabled={!stripe || processing}
+        className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        {processing ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Processing...
+          </>
+        ) : (
+          <>
+            <CreditCard className="w-5 h-5" />
+            Pay Now
+          </>
+        )}
+      </button>
+    </div>
+  );
+};
+
 const Checkout: React.FC<Props> = ({
   schedule,
   participants: initialParticipants,
   pricing,
   requiresWaiver,
   requiresMedical,
+  stripeKey,
+  allowPayAtShop = true,
 }) => {
   const [participants, setParticipants] = useState(initialParticipants);
   const [additionalParticipants, setAdditionalParticipants] = useState<ParticipantInfo[]>(
     Array(Math.max(0, initialParticipants - 1)).fill({ name: '', email: '', certification_level: '' })
   );
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'at_shop'>('online');
+  const [stripePromise, setStripePromise] = useState<Promise<Stripe | null> | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
 
   const { data, setData, post, processing, errors } = useForm({
     schedule_id: schedule.id,
@@ -55,10 +133,29 @@ const Checkout: React.FC<Props> = ({
     email: '',
     phone: '',
     participants: [] as ParticipantInfo[],
+    payment_method: 'online' as 'online' | 'at_shop',
     special_requests: '',
     marketing_consent: false,
     terms_accepted: false,
+    stripe_payment_intent_id: '',
   });
+
+  // Initialize Stripe
+  useEffect(() => {
+    if (stripeKey) {
+      setStripePromise(loadStripe(stripeKey));
+    } else {
+      // Fetch Stripe key from server
+      fetch('/payment/config')
+        .then(res => res.json())
+        .then(data => {
+          if (data.publishable_key) {
+            setStripePromise(loadStripe(data.publishable_key));
+          }
+        })
+        .catch(console.error);
+    }
+  }, [stripeKey]);
 
   const formatTime = (time: string) => {
     return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
@@ -115,10 +212,76 @@ const Checkout: React.FC<Props> = ({
     total: pricing.pricePerPerson * participants,
   };
 
+  // Create payment intent when user is ready to pay
+  const initializePayment = async () => {
+    if (!data.first_name || !data.last_name || !data.email) {
+      setPaymentError('Please fill in your contact information first');
+      return;
+    }
+
+    setPaymentProcessing(true);
+    setPaymentError(null);
+
+    try {
+      const response = await fetch('/payment/create-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          amount: calculatedPricing.total,
+          email: data.email,
+          name: `${data.first_name} ${data.last_name}`,
+          schedule_id: schedule.id,
+          participant_count: participants,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.error) {
+        setPaymentError(result.error);
+      } else {
+        setClientSecret(result.client_secret);
+      }
+    } catch (err) {
+      setPaymentError('Failed to initialize payment. Please try again.');
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
+  const handlePaymentSuccess = (paymentIntentId: string) => {
+    setData('stripe_payment_intent_id', paymentIntentId);
+    // Submit the form with payment info
+    post('/book/checkout', {
+      data: {
+        ...data,
+        participants: additionalParticipants,
+        payment_method: 'online',
+        stripe_payment_intent_id: paymentIntentId,
+      },
+    });
+  };
+
+  const handlePaymentError = (error: string) => {
+    setPaymentError(error);
+    setPaymentProcessing(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setData('participants', additionalParticipants);
-    post('/book/checkout');
+    if (paymentMethod === 'at_shop') {
+      setData('participants', additionalParticipants);
+      setData('payment_method', 'at_shop');
+      post('/book/checkout');
+    } else {
+      // For online payment, initialize Stripe
+      if (!clientSecret) {
+        initializePayment();
+      }
+    }
   };
 
   const available = schedule.max_participants - (schedule.booked_count || 0);
@@ -331,6 +494,132 @@ const Checkout: React.FC<Props> = ({
                   />
                 </div>
 
+                {/* Payment Method Selection */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                    Payment Method
+                  </h2>
+                  <div className="space-y-3">
+                    <label
+                      className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${
+                        paymentMethod === 'online'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment_method"
+                        value="online"
+                        checked={paymentMethod === 'online'}
+                        onChange={() => setPaymentMethod('online')}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-5 h-5 text-gray-600" />
+                          <span className="font-medium text-gray-900">Pay Online Now</span>
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Secure payment with credit/debit card
+                        </p>
+                      </div>
+                    </label>
+
+                    {allowPayAtShop && (
+                      <label
+                        className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${
+                          paymentMethod === 'at_shop'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="payment_method"
+                          value="at_shop"
+                          checked={paymentMethod === 'at_shop'}
+                          onChange={() => setPaymentMethod('at_shop')}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <div className="ml-3 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Wallet className="w-5 h-5 text-gray-600" />
+                            <span className="font-medium text-gray-900">Pay at Dive Shop</span>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Pay when you arrive for your activity
+                          </p>
+                        </div>
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Stripe Payment Form */}
+                  {paymentMethod === 'online' && clientSecret && stripePromise && (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <Elements
+                        stripe={stripePromise}
+                        options={{
+                          clientSecret,
+                          appearance: {
+                            theme: 'stripe',
+                            variables: {
+                              colorPrimary: '#2563eb',
+                            },
+                          },
+                        }}
+                      >
+                        <StripePaymentForm
+                          onSuccess={handlePaymentSuccess}
+                          onError={handlePaymentError}
+                          processing={paymentProcessing}
+                          setProcessing={setPaymentProcessing}
+                        />
+                      </Elements>
+                    </div>
+                  )}
+
+                  {/* Initialize Payment Button */}
+                  {paymentMethod === 'online' && !clientSecret && (
+                    <div className="mt-6">
+                      <button
+                        type="button"
+                        onClick={initializePayment}
+                        disabled={!data.first_name || !data.last_name || !data.email || paymentProcessing}
+                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {paymentProcessing ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Initializing...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="w-5 h-5" />
+                            Continue to Payment
+                          </>
+                        )}
+                      </button>
+                      {(!data.first_name || !data.last_name || !data.email) && (
+                        <p className="text-sm text-gray-500 mt-2 text-center">
+                          Fill in your contact information above to continue
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Payment Error */}
+                  {paymentError && (
+                    <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-red-700">
+                        <AlertCircle className="w-5 h-5" />
+                        <span>{paymentError}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Terms & Conditions */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="space-y-4">
@@ -389,15 +678,17 @@ const Checkout: React.FC<Props> = ({
                   </div>
                 )}
 
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={processing || !data.terms_accepted}
-                  className="w-full py-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <CreditCard className="w-5 h-5" />
-                  {processing ? 'Processing...' : `Complete Booking - ${formatCurrency(calculatedPricing.total)}`}
-                </button>
+                {/* Submit Button - Only for Pay at Shop */}
+                {paymentMethod === 'at_shop' && (
+                  <button
+                    type="submit"
+                    disabled={processing || !data.terms_accepted}
+                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Wallet className="w-5 h-5" />
+                    {processing ? 'Processing...' : `Book Now - Pay at Shop (${formatCurrency(calculatedPricing.total)})`}
+                  </button>
+                )}
               </form>
             </div>
 

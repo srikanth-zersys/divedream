@@ -280,11 +280,35 @@ class SettingsController extends Controller
     public function billing()
     {
         $tenant = $this->tenantService->getCurrentTenant();
+        $subscription = $tenant->activeSubscription();
+        $plan = $subscription?->plan;
+
+        // Get available plans
+        $plans = \App\Models\SubscriptionPlan::active()->ordered()->get();
+
+        // Get invoices
+        $invoices = $subscription
+            ? \App\Models\SubscriptionInvoice::where('tenant_id', $tenant->id)
+                ->orderBy('created_at', 'desc')
+                ->limit(12)
+                ->get()
+            : collect();
 
         return Inertia::render('admin/settings/billing', [
             'tenant' => $tenant,
-            'subscription' => $tenant->subscription ?? null,
-            'invoices' => [], // Would come from Stripe
+            'subscription' => $subscription,
+            'plan' => $plan,
+            'plans' => $plans,
+            'invoices' => $invoices,
+            'usage' => [
+                'bookings_used' => $subscription?->bookings_this_month ?? 0,
+                'bookings_limit' => $plan?->max_bookings_per_month,
+                'locations_used' => $tenant->locations()->count(),
+                'locations_limit' => $plan?->max_locations,
+                'users_used' => $tenant->users()->count(),
+                'users_limit' => $plan?->max_users,
+            ],
+            'stripeKey' => config('services.stripe.key'),
         ]);
     }
 
@@ -341,6 +365,82 @@ class SettingsController extends Controller
         $user->delete();
 
         return redirect()->back()->with('success', 'Team member removed successfully.');
+    }
+
+    public function changePlan(Request $request)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        $validated = $request->validate([
+            'plan_id' => 'required|exists:subscription_plans,id',
+            'billing_cycle' => 'required|in:monthly,yearly',
+        ]);
+
+        $plan = \App\Models\SubscriptionPlan::findOrFail($validated['plan_id']);
+        $subscription = $tenant->activeSubscription();
+
+        $subscriptionService = app(\App\Services\SubscriptionService::class);
+
+        if ($subscription) {
+            $subscriptionService->changePlan($subscription, $plan, $validated['billing_cycle']);
+            $message = 'Plan changed successfully.';
+        } else {
+            $subscriptionService->startTrial($tenant, $plan);
+            $message = 'Trial started successfully.';
+        }
+
+        return redirect()->back()->with('success', $message);
+    }
+
+    public function cancelSubscription()
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+        $subscription = $tenant->activeSubscription();
+
+        if (!$subscription) {
+            return redirect()->back()->with('error', 'No active subscription found.');
+        }
+
+        $subscriptionService = app(\App\Services\SubscriptionService::class);
+        $subscriptionService->cancel($subscription, false);
+
+        return redirect()->back()->with('success', 'Subscription will be cancelled at the end of the billing period.');
+    }
+
+    public function resumeSubscription()
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+        $subscription = $tenant->activeSubscription();
+
+        if (!$subscription || !$subscription->canceled_at) {
+            return redirect()->back()->with('error', 'No cancelled subscription found.');
+        }
+
+        $subscriptionService = app(\App\Services\SubscriptionService::class);
+        $subscriptionService->resume($subscription);
+
+        return redirect()->back()->with('success', 'Subscription resumed successfully.');
+    }
+
+    public function billingPortal()
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        if (!$tenant->stripe_customer_id) {
+            return redirect()->back()->with('error', 'No billing account found. Please subscribe to a plan first.');
+        }
+
+        try {
+            $subscriptionService = app(\App\Services\SubscriptionService::class);
+            $url = $subscriptionService->createBillingPortalSession(
+                $tenant,
+                route('admin.settings.billing')
+            );
+
+            return redirect()->away($url);
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Failed to access billing portal: ' . $e->getMessage());
+        }
     }
 
     protected function getCurrencies(): array
