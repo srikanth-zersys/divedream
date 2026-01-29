@@ -26,6 +26,7 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
+import ProgressSteps from '@/components/ui/ProgressSteps';
 
 interface Props {
   schedule: Schedule;
@@ -379,6 +380,21 @@ const Checkout: React.FC<Props> = ({
             </div>
           </div>
         </header>
+
+        {/* Progress Steps */}
+        <div className="bg-white border-b border-gray-200 py-6">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ProgressSteps
+              steps={[
+                { id: 1, name: 'Select' },
+                { id: 2, name: 'Details' },
+                { id: 3, name: 'Payment' },
+                { id: 4, name: 'Confirm' },
+              ]}
+              currentStep={clientSecret ? 3 : 2}
+            />
+          </div>
+        </div>
 
         <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
