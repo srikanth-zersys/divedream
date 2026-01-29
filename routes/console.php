@@ -22,3 +22,31 @@ Schedule::command('automation:process')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Process lead nurturing sequences every 15 minutes
+// - Welcome email series
+// - Re-engagement campaigns
+Schedule::command('leads:process-nurturing')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Process referral rewards hourly
+// - Issue pending rewards after booking completion
+// - Expire old referral codes
+Schedule::command('referrals:process-rewards')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Apply lead score decay weekly (Sundays at midnight)
+Schedule::command('leads:decay-scores')
+    ->weeklyOn(0, '00:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Start re-engagement sequences for stale leads daily
+Schedule::command('leads:re-engagement')
+    ->dailyAt('09:00')
+    ->withoutOverlapping()
+    ->runInBackground();

@@ -18,6 +18,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\BookingController as PublicBookingController;
 use App\Http\Controllers\Public\CartRecoveryController;
 use App\Http\Controllers\Public\QuoteViewController;
+use App\Http\Controllers\Public\LeadCaptureController;
+use App\Http\Controllers\Public\ReferralController;
 use App\Http\Controllers\Public\ReviewController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\UserController;
@@ -72,6 +74,29 @@ Route::prefix('cart')->name('public.cart.')->group(function () {
 
 // Unsubscribe from marketing emails
 Route::get('/unsubscribe/{token}', [CartRecoveryController::class, 'unsubscribe'])->name('public.unsubscribe');
+
+// Lead capture and tracking
+Route::prefix('leads')->name('public.leads.')->group(function () {
+    Route::post('/capture', [LeadCaptureController::class, 'capture'])->name('capture');
+    Route::post('/track', [LeadCaptureController::class, 'trackActivity'])->name('track');
+    Route::post('/email/{type}', [LeadCaptureController::class, 'trackEmail'])->name('email');
+    Route::post('/profile', [LeadCaptureController::class, 'updateProfile'])->name('profile');
+    Route::get('/status', [LeadCaptureController::class, 'getLeadStatus'])->name('status');
+    Route::get('/unsubscribe/{token}', [LeadCaptureController::class, 'unsubscribe'])->name('unsubscribe');
+});
+
+// Referral program
+Route::prefix('referral')->name('public.referral.')->group(function () {
+    Route::get('/program', [ReferralController::class, 'showProgram'])->name('program');
+    Route::get('/settings', [ReferralController::class, 'getProgramSettings'])->name('settings');
+    Route::post('/link', [ReferralController::class, 'getMyReferralLink'])->name('link');
+    Route::post('/stats', [ReferralController::class, 'getMyStats'])->name('stats');
+    Route::post('/validate', [ReferralController::class, 'validateCode'])->name('validate');
+    Route::post('/share', [ReferralController::class, 'trackShare'])->name('share');
+});
+
+// Referral link redirect (short URL)
+Route::get('/r/{code}', [ReferralController::class, 'handleClick'])->name('public.referral.click');
 
 // Customer portal
 Route::prefix('portal')->name('portal.')->middleware('auth')->group(function () {
