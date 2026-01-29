@@ -15,6 +15,8 @@ import {
   User,
   Wallet,
   Loader2,
+  Tag,
+  X,
 } from 'lucide-react';
 import { Schedule } from '@/types/dive-club';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
@@ -106,6 +108,14 @@ const StripePaymentForm: React.FC<{
   );
 };
 
+interface AppliedDiscount {
+  code: string;
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  discountAmount: number;
+}
+
 const Checkout: React.FC<Props> = ({
   schedule,
   participants: initialParticipants,
@@ -125,6 +135,12 @@ const Checkout: React.FC<Props> = ({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
+  // Discount code state
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountLoading, setDiscountLoading] = useState(false);
+  const [discountError, setDiscountError] = useState<string | null>(null);
+  const [appliedDiscount, setAppliedDiscount] = useState<AppliedDiscount | null>(null);
+
   const { data, setData, post, processing, errors } = useForm({
     schedule_id: schedule.id,
     participant_count: initialParticipants,
@@ -138,6 +154,7 @@ const Checkout: React.FC<Props> = ({
     marketing_consent: false,
     terms_accepted: false,
     stripe_payment_intent_id: '',
+    discount_code: '',
   });
 
   // Initialize Stripe
@@ -208,8 +225,61 @@ const Checkout: React.FC<Props> = ({
   const calculatedPricing = {
     pricePerPerson: pricing.pricePerPerson,
     subtotal: pricing.pricePerPerson * participants,
+    discount: appliedDiscount?.discountAmount || 0,
     tax: 0, // Calculate based on tenant settings
-    total: pricing.pricePerPerson * participants,
+    total: (pricing.pricePerPerson * participants) - (appliedDiscount?.discountAmount || 0),
+  };
+
+  // Apply discount code
+  const applyDiscountCode = async () => {
+    if (!discountCode.trim()) {
+      setDiscountError('Please enter a discount code');
+      return;
+    }
+
+    setDiscountLoading(true);
+    setDiscountError(null);
+
+    try {
+      const response = await fetch('/book/validate-discount', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          code: discountCode.trim().toUpperCase(),
+          schedule_id: schedule.id,
+          subtotal: pricing.pricePerPerson * participants,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.valid) {
+        setAppliedDiscount({
+          code: result.code,
+          name: result.name,
+          type: result.type,
+          value: result.value,
+          discountAmount: result.discount_amount,
+        });
+        setData('discount_code', result.code);
+        setDiscountCode('');
+      } else {
+        setDiscountError(result.message || 'Invalid discount code');
+      }
+    } catch (err) {
+      setDiscountError('Failed to validate discount code');
+    } finally {
+      setDiscountLoading(false);
+    }
+  };
+
+  const removeDiscount = () => {
+    setAppliedDiscount(null);
+    setData('discount_code', '');
+    setDiscountError(null);
   };
 
   // Create payment intent when user is ready to pay
@@ -494,6 +564,67 @@ const Checkout: React.FC<Props> = ({
                   />
                 </div>
 
+                {/* Discount Code */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                    Discount Code
+                  </h2>
+
+                  {appliedDiscount ? (
+                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-5 h-5 text-green-600" />
+                        <div>
+                          <span className="font-medium text-green-800">{appliedDiscount.code}</span>
+                          <span className="text-green-600 ml-2">
+                            ({appliedDiscount.type === 'percentage'
+                              ? `${appliedDiscount.value}% off`
+                              : `$${appliedDiscount.value} off`})
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeDiscount}
+                        className="p-1 text-green-600 hover:text-green-800 hover:bg-green-100 rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={discountCode}
+                        onChange={(e) => {
+                          setDiscountCode(e.target.value.toUpperCase());
+                          setDiscountError(null);
+                        }}
+                        placeholder="Enter discount code"
+                        className={`flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase ${
+                          discountError ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={applyDiscountCode}
+                        disabled={discountLoading || !discountCode.trim()}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {discountLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          'Apply'
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {discountError && (
+                    <p className="mt-2 text-sm text-red-600">{discountError}</p>
+                  )}
+                </div>
+
                 {/* Payment Method Selection */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -739,6 +870,17 @@ const Checkout: React.FC<Props> = ({
                       {formatCurrency(calculatedPricing.subtotal)}
                     </span>
                   </div>
+                  {calculatedPricing.discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-green-600 flex items-center gap-1">
+                        <Tag className="w-3 h-3" />
+                        Discount ({appliedDiscount?.code})
+                      </span>
+                      <span className="text-green-600">
+                        -{formatCurrency(calculatedPricing.discount)}
+                      </span>
+                    </div>
+                  )}
                   {calculatedPricing.tax > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Tax</span>

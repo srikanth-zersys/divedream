@@ -50,6 +50,7 @@ Route::prefix('book')->name('public.book.')->group(function () {
     Route::get('/product/{product:slug}', [PublicBookingController::class, 'product'])->name('product');
     Route::get('/schedule/{schedule}', [PublicBookingController::class, 'schedule'])->name('schedule');
     Route::post('/check-availability', [PublicBookingController::class, 'checkAvailability'])->name('check-availability');
+    Route::post('/validate-discount', [PublicBookingController::class, 'validateDiscount'])->name('validate-discount');
     Route::get('/checkout', [PublicBookingController::class, 'checkout'])->name('checkout');
     Route::post('/checkout', [PublicBookingController::class, 'processCheckout'])->name('process-checkout');
     Route::get('/confirmation/{booking}', [PublicBookingController::class, 'confirmation'])->name('confirmation');
@@ -212,7 +213,7 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
         Route::put('/{instructor}', [InstructorController::class, 'update'])->name('update');
         Route::delete('/{instructor}', [InstructorController::class, 'destroy'])->name('destroy');
         Route::get('/{instructor}/availability', [InstructorController::class, 'availability'])->name('availability');
-        Route::post('/{instructor}/availability', [InstructorController::class, 'updateAvailability'])->name('update-availability');
+        Route::put('/{instructor}/availability', [InstructorController::class, 'updateAvailability'])->name('update-availability');
     });
 
     // Equipment

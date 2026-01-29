@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Public;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\BookingParticipant;
+use App\Models\DiscountCode;
 use App\Models\Member;
 use App\Models\Product;
 use App\Models\Schedule;
@@ -256,6 +257,60 @@ class BookingController extends Controller
     }
 
     /**
+     * Validate discount code
+     */
+    public function validateDiscount(Request $request)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        $validated = $request->validate([
+            'code' => 'required|string|max:50',
+            'schedule_id' => 'required|exists:schedules,id',
+            'subtotal' => 'required|numeric|min:0',
+        ]);
+
+        $code = strtoupper(trim($validated['code']));
+
+        $discount = DiscountCode::forTenant($tenant->id)
+            ->where('code', $code)
+            ->valid()
+            ->first();
+
+        if (!$discount) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Invalid or expired discount code',
+            ]);
+        }
+
+        // Get schedule to check product/location restrictions
+        $schedule = Schedule::find($validated['schedule_id']);
+
+        if (!$discount->canBeAppliedTo(
+            $validated['subtotal'],
+            $schedule->product_id,
+            $schedule->location_id
+        )) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'This discount code cannot be applied to this booking',
+            ]);
+        }
+
+        $discountAmount = $discount->calculateDiscount($validated['subtotal']);
+
+        return response()->json([
+            'valid' => true,
+            'code' => $discount->code,
+            'name' => $discount->name,
+            'type' => $discount->type,
+            'value' => (float) $discount->value,
+            'discount_amount' => $discountAmount,
+            'message' => 'Discount applied successfully',
+        ]);
+    }
+
+    /**
      * Checkout page
      */
     public function checkout(Request $request): Response
@@ -320,6 +375,7 @@ class BookingController extends Controller
             // Options
             'special_requests' => 'nullable|string|max:1000',
             'marketing_consent' => 'boolean',
+            'discount_code' => 'nullable|string|max:50',
         ]);
 
         try {
@@ -374,10 +430,27 @@ class BookingController extends Controller
                 $pricePerPerson = $schedule->price_override ?? $schedule->product->price;
                 $subtotal = $pricePerPerson * $validated['participant_count'];
 
-                // Calculate tax based on tenant settings
+                // Apply discount if provided
+                $discountAmount = 0;
+                $discountCode = null;
+                if (!empty($validated['discount_code'])) {
+                    $discount = DiscountCode::forTenant($tenant->id)
+                        ->where('code', strtoupper($validated['discount_code']))
+                        ->valid()
+                        ->first();
+
+                    if ($discount && $discount->canBeAppliedTo($subtotal, $schedule->product_id, $schedule->location_id)) {
+                        $discountAmount = $discount->calculateDiscount($subtotal);
+                        $discountCode = $discount->code;
+                        $discount->incrementUsage();
+                    }
+                }
+
+                // Calculate tax based on tenant settings (after discount)
                 $taxRate = $tenant->tax_rate ?? 0;
-                $tax = round($subtotal * ($taxRate / 100), 2);
-                $total = $subtotal + $tax;
+                $taxableAmount = $subtotal - $discountAmount;
+                $tax = round($taxableAmount * ($taxRate / 100), 2);
+                $total = $taxableAmount + $tax;
 
                 // Determine payment method and expiration
                 // Industry best practice: Allow pay-at-shop, only expire online payment bookings
@@ -413,7 +486,8 @@ class BookingController extends Controller
                     'booking_time' => $schedule->start_time,
                     'participant_count' => $validated['participant_count'],
                     'subtotal' => $subtotal,
-                    'discount_amount' => 0,
+                    'discount_amount' => $discountAmount,
+                    'discount_code' => $discountCode,
                     'tax_amount' => $tax,
                     'total_amount' => $total,
                     'currency' => $tenant->currency ?? 'USD',
