@@ -111,7 +111,7 @@
                 <div class="checklist">
                     <h3>Before Your Dive:</h3>
                     <ul style="margin: 0; padding-left: 20px;">
-                        @if(!$booking->waiver_signed)
+                        @if(!$booking->waiver_completed)
                         <li>Sign the liability waiver</li>
                         @endif
                         @if($product->requires_medical_clearance)

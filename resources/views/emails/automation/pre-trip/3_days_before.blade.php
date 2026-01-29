@@ -50,10 +50,10 @@ Check the forecast for {{ \Carbon\Carbon::parse($schedule->date)->format('F j') 
 
 ---
 
-@if(!$booking->waiver_signed || !$booking->medical_form_completed)
+@if(!$booking->waiver_completed || !$booking->medical_form_completed)
 ## Action Required
 
-@if(!$booking->waiver_signed)
+@if(!$booking->waiver_completed)
 Please sign your waiver before arrival:
 <x-mail::button :url="route('portal.sign-waiver', $booking)">
 Sign Waiver

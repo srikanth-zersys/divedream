@@ -273,7 +273,7 @@ const Confirmation: React.FC<Props> = ({ booking }) => {
                   </div>
                 </div>
               </div>
-              {!booking.waiver_signed && (
+              {!booking.waiver_completed && (
                 <div className="flex items-start gap-3">
                   <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                     <span className="text-sm font-medium text-blue-800">2</span>
@@ -288,7 +288,7 @@ const Confirmation: React.FC<Props> = ({ booking }) => {
               )}
               <div className="flex items-start gap-3">
                 <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-sm font-medium text-blue-800">{!booking.waiver_signed ? '3' : '2'}</span>
+                  <span className="text-sm font-medium text-blue-800">{!booking.waiver_completed ? '3' : '2'}</span>
                 </div>
                 <div>
                   <div className="font-medium text-blue-900">Arrive on time</div>

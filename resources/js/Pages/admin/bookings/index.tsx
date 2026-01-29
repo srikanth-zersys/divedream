@@ -360,7 +360,7 @@ const BookingsIndex: React.FC<Props> = ({ bookings, products, filters }) => {
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
                           {booking.status.replace('_', ' ')}
                         </span>
-                        {!booking.waiver_signed && (
+                        {!booking.waiver_completed && (
                           <span className="ml-1 inline-flex items-center" title="Waiver not signed">
                             <XCircle className="w-4 h-4 text-red-500" />
                           </span>

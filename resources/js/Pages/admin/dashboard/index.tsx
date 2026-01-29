@@ -280,7 +280,7 @@ const Dashboard: React.FC<Props> = ({
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          {!booking.waiver_signed && (
+                          {!booking.waiver_completed && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
                               No waiver
                             </span>

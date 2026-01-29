@@ -20,7 +20,7 @@ We're excited that your dive adventure is just **7 days away**! Here's what you 
 
 ## What You Need to Do Before Your Trip
 
-@if(!$booking->waiver_signed)
+@if(!$booking->waiver_completed)
 ### 1. Sign Your Waiver
 Please complete the liability waiver before your arrival. This saves time on the day!
 

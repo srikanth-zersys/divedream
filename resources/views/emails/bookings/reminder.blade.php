@@ -78,7 +78,7 @@
                     </ul>
                 </div>
 
-                @if(!$booking->waiver_signed)
+                @if(!$booking->waiver_completed)
                 <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin-top: 20px;">
                     <h3 style="color: #dc2626; margin: 0 0 10px;">Action Required</h3>
                     <p style="color: #b91c1c; margin: 0;">You haven't signed your waiver yet. Please complete it before arriving.</p>

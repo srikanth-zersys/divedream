@@ -56,7 +56,7 @@ class DashboardController extends Controller
         $missingWaivers = Booking::forTenant($tenant->id)
             ->when($location, fn($q) => $q->forLocation($location->id))
             ->whereDate('booking_date', $today)
-            ->where('waiver_signed', false)
+            ->where('waiver_completed', false)
             ->count();
 
         $missingMedicalForms = Booking::forTenant($tenant->id)
@@ -111,7 +111,7 @@ class DashboardController extends Controller
             ->when($location, fn($q) => $q->forLocation($location->id))
             ->whereBetween('booking_date', [$today, $today->copy()->addDays(7)])
             ->where(function ($q) {
-                $q->where('waiver_signed', false)
+                $q->where('waiver_completed', false)
                     ->orWhere('medical_form_completed', false)
                     ->orWhere('status', 'pending');
             })

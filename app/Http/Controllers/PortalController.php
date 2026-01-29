@@ -43,7 +43,7 @@ class PortalController extends Controller
 
         $pendingWaivers = Booking::where('member_id', $member->id)
             ->where('booking_date', '>=', now()->toDateString())
-            ->where('waiver_signed', false)
+            ->where('waiver_completed', false)
             ->whereIn('status', ['confirmed', 'pending'])
             ->count();
 
@@ -135,8 +135,19 @@ class PortalController extends Controller
             ])
             ->findOrFail($id);
 
+        // Get required waiver templates for this booking
+        $waivers = [];
+        if (!$booking->waiver_completed && $booking->location_id) {
+            $waivers = \App\Models\WaiverTemplate::getRequiredForBooking(
+                $booking->tenant_id,
+                $booking->location_id,
+                'en' // Could be dynamic based on member preferences
+            );
+        }
+
         return Inertia::render('portal/booking-detail', [
             'booking' => $booking,
+            'waivers' => $waivers,
         ]);
     }
 
@@ -197,9 +208,9 @@ class PortalController extends Controller
         ]);
 
         $booking->update([
-            'waiver_signed' => true,
-            'waiver_signed_at' => now(),
-            'notes' => $booking->notes . "\nWaiver signed electronically at " . now()->toDateTimeString(),
+            'waiver_completed' => true,
+            'waiver_completed_at' => now(),
+            'internal_notes' => $booking->internal_notes . "\nWaiver signed electronically at " . now()->toDateTimeString(),
         ]);
 
         return redirect()->back()->with('success', 'Waiver signed successfully.');

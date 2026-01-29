@@ -242,7 +242,7 @@ const PortalBookings: React.FC<Props> = ({ bookings, filters }) => {
                         {/* Action Required Tags */}
                         {isUpcoming && (
                           <div className="mt-3 flex items-center gap-2">
-                            {!booking.waiver_signed && (
+                            {!booking.waiver_completed && (
                               <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                                 Waiver Required
                               </span>

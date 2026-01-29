@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useState, useRef } from 'react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
   Calendar,
   Clock,
@@ -14,17 +14,95 @@ import {
   ArrowLeft,
   XCircle,
   Waves,
+  PenLine,
+  RotateCcw,
 } from 'lucide-react';
 import { Booking } from '@/types/dive-club';
 
-interface Props {
-  booking: Booking;
+interface WaiverTemplate {
+  id: number;
+  name: string;
+  type: string;
+  content: string;
 }
 
-const BookingDetail: React.FC<Props> = ({ booking }) => {
+interface Props {
+  booking: Booking;
+  waivers?: WaiverTemplate[];
+}
+
+const BookingDetail: React.FC<Props> = ({ booking, waivers = [] }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [currentWaiverIndex, setCurrentWaiverIndex] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
+
+  const waiverForm = useForm({
+    signature: '',
+    agreed_to_terms: false,
+  });
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    setIsDrawing(true);
+    setHasSignature(true);
+
+    const rect = canvas.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+
+    const canvas = canvasRef.current;
+    if (canvas && hasSignature) {
+      waiverForm.setData('signature', canvas.toDataURL());
+    }
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+    waiverForm.setData('signature', '');
+  };
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -66,12 +144,28 @@ const BookingDetail: React.FC<Props> = ({ booking }) => {
   };
 
   const handleSignWaiver = () => {
-    router.post(`/portal/booking/${booking.id}/waiver`, {
-      signature: 'electronic_signature',
-      agreed_to_terms: true,
+    if (!waiverForm.data.agreed_to_terms || !waiverForm.data.signature) {
+      return;
+    }
+
+    waiverForm.post(`/portal/booking/${booking.id}/waiver`, {
+      onSuccess: () => {
+        setShowWaiverModal(false);
+        clearSignature();
+        waiverForm.reset();
+      },
     });
-    setShowWaiverModal(false);
   };
+
+  const openWaiverModal = () => {
+    setCurrentWaiverIndex(0);
+    setShowWaiverModal(true);
+    waiverForm.reset();
+    clearSignature();
+  };
+
+  const currentWaiver = waivers[currentWaiverIndex];
+  const isLastWaiver = currentWaiverIndex === waivers.length - 1;
 
   const statusConfig = getStatusConfig(booking.status);
 
@@ -102,7 +196,7 @@ const BookingDetail: React.FC<Props> = ({ booking }) => {
 
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
           {/* Alerts */}
-          {isUpcoming && !booking.waiver_signed && (
+          {isUpcoming && !booking.waiver_completed && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -111,7 +205,7 @@ const BookingDetail: React.FC<Props> = ({ booking }) => {
                   You must sign the liability waiver before your dive.
                 </p>
                 <button
-                  onClick={() => setShowWaiverModal(true)}
+                  onClick={openWaiverModal}
                   className="mt-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700"
                 >
                   Sign Waiver Now
@@ -351,30 +445,151 @@ const BookingDetail: React.FC<Props> = ({ booking }) => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/50" onClick={() => setShowWaiverModal(false)} />
-            <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Liability Waiver</h3>
-              <div className="prose prose-sm max-h-64 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-lg">
-                <p>By signing this waiver, I acknowledge that I understand and accept the inherent risks associated with scuba diving...</p>
-                <p>I certify that I am in good physical health and have disclosed any medical conditions...</p>
-                <p>I agree to follow all safety instructions and dive within my certification limits...</p>
+            <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {currentWaiver?.name || 'Liability Waiver'}
+                    </h3>
+                    {waivers.length > 1 && (
+                      <p className="text-sm text-gray-500">
+                        Document {currentWaiverIndex + 1} of {waivers.length}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowWaiverModal(false)}
+                    className="p-2 hover:bg-gray-100 rounded-lg"
+                  >
+                    <XCircle className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
               </div>
-              <label className="flex items-center gap-2 mb-4">
-                <input type="checkbox" className="rounded" required />
-                <span className="text-sm text-gray-700">I have read and agree to the terms above</span>
-              </label>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowWaiverModal(false)}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSignWaiver}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Sign Waiver
-                </button>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {/* Waiver Content */}
+                <div className="prose prose-sm max-w-none mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  {currentWaiver?.content ? (
+                    <div dangerouslySetInnerHTML={{ __html: currentWaiver.content.replace(/\n/g, '<br>') }} />
+                  ) : (
+                    <>
+                      <h4>LIABILITY RELEASE AND ASSUMPTION OF RISK</h4>
+                      <p>
+                        I, the undersigned participant, hereby acknowledge that I understand that scuba diving
+                        and related activities involve inherent risks, including but not limited to decompression
+                        sickness, air embolism, drowning, and other injuries that could result in permanent
+                        disability or death.
+                      </p>
+                      <p>
+                        I understand and agree that neither the dive operator, its employees, nor its affiliates
+                        may be held liable or responsible in any way for any injury, death, or other damages
+                        that may occur as a result of my participation in diving activities.
+                      </p>
+                      <p>
+                        I certify that I am in good physical condition and do not suffer from any medical
+                        condition that would prevent me from participating in diving activities. I agree to
+                        follow all safety instructions and dive within my certification limits.
+                      </p>
+                      <p>
+                        I have read this entire release and assumption of risk agreement, understand it, and
+                        agree to be bound by its terms.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Participant Info */}
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-2">Participant Information</h4>
+                  <div className="text-sm text-blue-800 space-y-1">
+                    <p><strong>Booking:</strong> #{booking.booking_number}</p>
+                    <p><strong>Activity:</strong> {booking.product?.name}</p>
+                    <p><strong>Date:</strong> {formatDate(booking.booking_date)}</p>
+                  </div>
+                </div>
+
+                {/* Signature Section */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      <PenLine className="w-4 h-4 inline mr-1" />
+                      Your Signature
+                    </label>
+                    {hasSignature && (
+                      <button
+                        type="button"
+                        onClick={clearSignature}
+                        className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white">
+                    <canvas
+                      ref={canvasRef}
+                      width={500}
+                      height={150}
+                      className="w-full touch-none cursor-crosshair"
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                    />
+                  </div>
+                  {!hasSignature && (
+                    <p className="mt-1 text-sm text-gray-500">
+                      Sign above using your mouse or finger
+                    </p>
+                  )}
+                </div>
+
+                {/* Agreement Checkbox */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={waiverForm.data.agreed_to_terms}
+                    onChange={(e) => waiverForm.setData('agreed_to_terms', e.target.checked)}
+                    className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    I have read the above waiver in its entirety, understand its contents, and agree
+                    to be bound by its terms. I acknowledge that by signing this document electronically,
+                    I am providing my legal signature.
+                  </span>
+                </label>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-gray-200 bg-gray-50">
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-gray-500">
+                    Date: {new Date().toLocaleDateString()}
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowWaiverModal(false)}
+                      className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSignWaiver}
+                      disabled={!waiverForm.data.agreed_to_terms || !hasSignature || waiverForm.processing}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      {waiverForm.processing ? 'Signing...' : 'Sign & Submit'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

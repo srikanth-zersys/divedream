@@ -294,8 +294,8 @@ export interface Booking {
   source: 'admin' | 'website' | 'phone' | 'walk_in' | 'partner';
   status: 'pending' | 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'no_show';
   payment_status: 'unpaid' | 'partial' | 'paid' | 'refunded';
-  waiver_signed: boolean;
-  waiver_signed_at: string | null;
+  waiver_completed: boolean;
+  waiver_completed_at: string | null;
   medical_form_completed: boolean;
   checked_in_at: string | null;
   checked_out_at: string | null;

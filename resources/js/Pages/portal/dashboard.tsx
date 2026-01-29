@@ -161,7 +161,7 @@ const PortalDashboard: React.FC<Props> = ({ member, upcomingBookings, pastBookin
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
                                   {booking.status}
                                 </span>
-                                {!booking.waiver_signed && (
+                                {!booking.waiver_completed && (
                                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                     Waiver Required
                                   </span>

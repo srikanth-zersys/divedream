@@ -147,7 +147,7 @@ class NotificationService
     {
         $member = $booking->member;
 
-        if (!$member || !$member->email || $booking->waiver_signed) {
+        if (!$member || !$member->email || $booking->waiver_completed) {
             return;
         }
 
