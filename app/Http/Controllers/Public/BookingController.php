@@ -296,6 +296,7 @@ class BookingController extends Controller
 
     /**
      * Process checkout and create booking
+     * Uses database transaction with pessimistic locking to prevent overbooking
      */
     public function processCheckout(Request $request): RedirectResponse
     {
@@ -303,7 +304,7 @@ class BookingController extends Controller
 
         $validated = $request->validate([
             'schedule_id' => 'required|exists:schedules,id',
-            'participant_count' => 'required|integer|min:1',
+            'participant_count' => 'required|integer|min:1|max:50',
             // Primary guest
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
@@ -319,97 +320,126 @@ class BookingController extends Controller
             'marketing_consent' => 'boolean',
         ]);
 
-        $schedule = Schedule::forTenant($tenant->id)
-            ->with(['product', 'location'])
-            ->findOrFail($validated['schedule_id']);
+        try {
+            // Use database transaction with pessimistic locking to prevent race conditions
+            $booking = \DB::transaction(function () use ($tenant, $validated) {
+                // Lock the schedule row to prevent concurrent bookings from overbooking
+                $schedule = Schedule::forTenant($tenant->id)
+                    ->with(['product', 'location'])
+                    ->lockForUpdate()
+                    ->findOrFail($validated['schedule_id']);
 
-        // Check availability
-        $bookedCount = $schedule->bookings()
-            ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->sum('participant_count');
+                // Check availability with locked row - now safe from race conditions
+                $bookedCount = $schedule->bookings()
+                    ->whereNotIn('status', ['cancelled', 'no_show'])
+                    ->sum('participant_count');
 
-        $available = $schedule->max_participants - $bookedCount;
+                $available = $schedule->max_participants - $bookedCount;
 
-        if ($validated['participant_count'] > $available) {
-            return back()
-                ->withInput()
-                ->withErrors(['participant_count' => "Only {$available} spots available."]);
-        }
+                if ($validated['participant_count'] > $available) {
+                    throw new \Exception("Only {$available} spots available.");
+                }
 
-        // Find or create member
-        $member = Member::forTenant($tenant->id)
-            ->where('email', $validated['email'])
-            ->first();
+                // Verify schedule is still bookable
+                if ($schedule->status !== 'active' || !$schedule->allow_online_booking) {
+                    throw new \Exception('This schedule is no longer available for booking.');
+                }
 
-        if (!$member) {
-            $member = Member::create([
-                'tenant_id' => $tenant->id,
-                'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'phone' => $validated['phone'] ?? null,
-                'marketing_consent' => $validated['marketing_consent'] ?? false,
-                'status' => 'active',
-                'source' => 'website',
-            ]);
-        }
+                // Verify booking date is not in the past
+                if ($schedule->date < Carbon::today()) {
+                    throw new \Exception('Cannot book a past date.');
+                }
 
-        // Calculate pricing
-        $pricePerPerson = $schedule->price_override ?? $schedule->product->price;
-        $subtotal = $pricePerPerson * $validated['participant_count'];
-        $tax = 0; // Calculate based on tenant settings
-        $total = $subtotal + $tax;
+                // Find or create member
+                $member = Member::forTenant($tenant->id)
+                    ->where('email', $validated['email'])
+                    ->first();
 
-        // Create booking
-        $booking = Booking::create([
-            'tenant_id' => $tenant->id,
-            'location_id' => $schedule->location_id,
-            'member_id' => $member->id,
-            'product_id' => $schedule->product_id,
-            'schedule_id' => $schedule->id,
-            'booking_number' => Booking::generateBookingNumber($tenant->id),
-            'booking_date' => $schedule->date,
-            'participant_count' => $validated['participant_count'],
-            'subtotal' => $subtotal,
-            'discount_amount' => 0,
-            'tax_amount' => $tax,
-            'total_amount' => $total,
-            'amount_paid' => 0,
-            'special_requests' => $validated['special_requests'] ?? null,
-            'source' => 'website',
-            'status' => 'pending',
-            'payment_status' => 'unpaid',
-        ]);
+                if (!$member) {
+                    $member = Member::create([
+                        'tenant_id' => $tenant->id,
+                        'first_name' => $validated['first_name'],
+                        'last_name' => $validated['last_name'],
+                        'email' => $validated['email'],
+                        'phone' => $validated['phone'] ?? null,
+                        'marketing_consent' => $validated['marketing_consent'] ?? false,
+                        'status' => 'active',
+                        'source' => 'website',
+                    ]);
+                }
 
-        // Create primary participant
-        BookingParticipant::create([
-            'booking_id' => $booking->id,
-            'member_id' => $member->id,
-            'name' => $validated['first_name'] . ' ' . $validated['last_name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'] ?? null,
-            'is_primary' => true,
-        ]);
+                // Calculate pricing with tax
+                $pricePerPerson = $schedule->price_override ?? $schedule->product->price;
+                $subtotal = $pricePerPerson * $validated['participant_count'];
 
-        // Create additional participants
-        if (isset($validated['participants'])) {
-            foreach ($validated['participants'] as $participant) {
+                // Calculate tax based on tenant settings
+                $taxRate = $tenant->tax_rate ?? 0;
+                $tax = round($subtotal * ($taxRate / 100), 2);
+                $total = $subtotal + $tax;
+
+                // Create booking with expiration for unpaid bookings (30 min to complete payment)
+                $booking = Booking::create([
+                    'tenant_id' => $tenant->id,
+                    'location_id' => $schedule->location_id,
+                    'member_id' => $member->id,
+                    'product_id' => $schedule->product_id,
+                    'schedule_id' => $schedule->id,
+                    'booking_number' => Booking::generateBookingNumber(),
+                    'booking_date' => $schedule->date,
+                    'booking_time' => $schedule->start_time,
+                    'participant_count' => $validated['participant_count'],
+                    'subtotal' => $subtotal,
+                    'discount_amount' => 0,
+                    'tax_amount' => $tax,
+                    'total_amount' => $total,
+                    'currency' => $tenant->currency ?? 'USD',
+                    'amount_paid' => 0,
+                    'balance_due' => $total,
+                    'payment_due_date' => now()->addMinutes(30), // Booking expires if unpaid
+                    'special_requests' => $validated['special_requests'] ?? null,
+                    'source' => 'website',
+                    'status' => 'pending',
+                    'payment_status' => 'unpaid',
+                ]);
+
+                // Create primary participant
                 BookingParticipant::create([
                     'booking_id' => $booking->id,
-                    'name' => $participant['name'],
-                    'email' => $participant['email'] ?? null,
-                    'certification_level' => $participant['certification_level'] ?? null,
-                    'is_primary' => false,
+                    'member_id' => $member->id,
+                    'name' => $validated['first_name'] . ' ' . $validated['last_name'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'] ?? null,
+                    'is_primary' => true,
                 ]);
-            }
+
+                // Create additional participants
+                if (isset($validated['participants'])) {
+                    foreach ($validated['participants'] as $participant) {
+                        BookingParticipant::create([
+                            'booking_id' => $booking->id,
+                            'name' => $participant['name'],
+                            'email' => $participant['email'] ?? null,
+                            'certification_level' => $participant['certification_level'] ?? null,
+                            'is_primary' => false,
+                        ]);
+                    }
+                }
+
+                return $booking;
+            });
+
+            // TODO: Integrate with Stripe for payment
+            // For now, redirect to confirmation
+
+            return redirect()
+                ->route('public.book.confirmation', $booking)
+                ->with('success', 'Booking created successfully! Please complete payment within 30 minutes.');
+
+        } catch (\Exception $e) {
+            return back()
+                ->withInput()
+                ->withErrors(['booking' => $e->getMessage()]);
         }
-
-        // TODO: Integrate with Stripe for payment
-        // For now, redirect to confirmation
-
-        return redirect()
-            ->route('public.book.confirmation', $booking)
-            ->with('success', 'Booking created successfully!');
     }
 
     /**
