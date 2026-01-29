@@ -13,3 +13,12 @@ Schedule::command('bookings:cleanup-expired')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Process marketing automation every 5 minutes
+// - Pre-trip reminder emails
+// - Abandoned cart recovery emails
+// - Post-trip review requests
+Schedule::command('automation:process')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();

@@ -16,7 +16,9 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\BookingController as PublicBookingController;
+use App\Http\Controllers\Public\CartRecoveryController;
 use App\Http\Controllers\Public\QuoteViewController;
+use App\Http\Controllers\Public\ReviewController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -51,6 +53,25 @@ Route::prefix('quote')->name('quotes.')->group(function () {
     Route::post('/{token}/request-changes', [QuoteViewController::class, 'requestChanges'])->name('request-changes');
     Route::get('/{token}/download', [QuoteViewController::class, 'download'])->name('download');
 });
+
+// Review collection (post-trip feedback)
+Route::prefix('review')->name('public.review.')->group(function () {
+    Route::get('/{token}', [ReviewController::class, 'show'])->name('show');
+    Route::post('/{token}', [ReviewController::class, 'submit'])->name('submit');
+    Route::get('/{token}/thank-you', [ReviewController::class, 'thankYou'])->name('thank-you');
+    Route::post('/{token}/external', [ReviewController::class, 'recordExternal'])->name('external');
+    Route::post('/{token}/decline', [ReviewController::class, 'decline'])->name('decline');
+});
+
+// Abandoned cart recovery
+Route::prefix('cart')->name('public.cart.')->group(function () {
+    Route::get('/recover/{token}', [CartRecoveryController::class, 'recover'])->name('recover');
+    Route::post('/track', [CartRecoveryController::class, 'track'])->name('track');
+    Route::post('/complete', [CartRecoveryController::class, 'complete'])->name('complete');
+});
+
+// Unsubscribe from marketing emails
+Route::get('/unsubscribe/{token}', [CartRecoveryController::class, 'unsubscribe'])->name('public.unsubscribe');
 
 // Customer portal
 Route::prefix('portal')->name('portal.')->middleware('auth')->group(function () {
