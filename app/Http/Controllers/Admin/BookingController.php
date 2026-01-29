@@ -144,68 +144,97 @@ class BookingController extends Controller
             'participants.*.certification_level' => 'nullable|string|max:100',
         ]);
 
-        // Create new member if needed
-        if (!$validated['member_id'] && isset($validated['new_member'])) {
-            $member = Member::create([
-                'tenant_id' => $tenant->id,
-                'first_name' => $validated['new_member']['first_name'],
-                'last_name' => $validated['new_member']['last_name'],
-                'email' => $validated['new_member']['email'],
-                'phone' => $validated['new_member']['phone'] ?? null,
-                'status' => 'active',
-                'source' => $validated['source'],
-            ]);
-            $validated['member_id'] = $member->id;
-        }
+        try {
+            // Use database transaction with pessimistic locking to prevent overbooking
+            $booking = \DB::transaction(function () use ($tenant, $location, $validated) {
+                // Create new member if needed
+                if (!$validated['member_id'] && isset($validated['new_member'])) {
+                    $member = Member::create([
+                        'tenant_id' => $tenant->id,
+                        'first_name' => $validated['new_member']['first_name'],
+                        'last_name' => $validated['new_member']['last_name'],
+                        'email' => $validated['new_member']['email'],
+                        'phone' => $validated['new_member']['phone'] ?? null,
+                        'status' => 'active',
+                        'source' => $validated['source'],
+                    ]);
+                    $validated['member_id'] = $member->id;
+                }
 
-        // Get product for pricing
-        $product = Product::findOrFail($validated['product_id']);
-        $schedule = isset($validated['schedule_id']) ? Schedule::find($validated['schedule_id']) : null;
+                // Get product for pricing
+                $product = Product::findOrFail($validated['product_id']);
 
-        // Calculate pricing
-        $pricePerPerson = $location
-            ? $product->getPriceForLocation($location->id)
-            : $product->price;
-        $subtotal = $pricePerPerson * $validated['participant_count'];
+                // If booking to a schedule, check availability with locking
+                $schedule = null;
+                if (isset($validated['schedule_id'])) {
+                    $schedule = Schedule::lockForUpdate()->findOrFail($validated['schedule_id']);
 
-        // Create booking
-        $booking = Booking::create([
-            'tenant_id' => $tenant->id,
-            'location_id' => $location?->id ?? $schedule?->location_id,
-            'member_id' => $validated['member_id'],
-            'product_id' => $validated['product_id'],
-            'schedule_id' => $validated['schedule_id'] ?? null,
-            'booking_number' => Booking::generateBookingNumber($tenant->id),
-            'booking_date' => $validated['booking_date'],
-            'participant_count' => $validated['participant_count'],
-            'subtotal' => $subtotal,
-            'discount_amount' => 0,
-            'tax_amount' => 0, // Calculate based on tenant settings
-            'total_amount' => $subtotal,
-            'amount_paid' => 0,
-            'special_requests' => $validated['special_requests'] ?? null,
-            'internal_notes' => $validated['internal_notes'] ?? null,
-            'source' => $validated['source'],
-            'status' => 'pending',
-            'payment_status' => 'unpaid',
-            'created_by' => auth()->id(),
-        ]);
+                    // Check availability
+                    $bookedCount = $schedule->bookings()
+                        ->whereNotIn('status', ['cancelled', 'no_show'])
+                        ->sum('participant_count');
 
-        // Create participants
-        if (isset($validated['participants'])) {
-            foreach ($validated['participants'] as $participant) {
-                BookingParticipant::create([
-                    'booking_id' => $booking->id,
-                    'name' => $participant['name'],
-                    'email' => $participant['email'] ?? null,
-                    'certification_level' => $participant['certification_level'] ?? null,
+                    $available = $schedule->max_participants - $bookedCount;
+
+                    if ($validated['participant_count'] > $available) {
+                        throw new \Exception("Only {$available} spots available on this schedule.");
+                    }
+                }
+
+                // Calculate pricing
+                $pricePerPerson = $location
+                    ? $product->getPriceForLocation($location->id)
+                    : $product->price;
+                $subtotal = $pricePerPerson * $validated['participant_count'];
+
+                // Create booking
+                $booking = Booking::create([
+                    'tenant_id' => $tenant->id,
+                    'location_id' => $location?->id ?? $schedule?->location_id,
+                    'member_id' => $validated['member_id'],
+                    'product_id' => $validated['product_id'],
+                    'schedule_id' => $validated['schedule_id'] ?? null,
+                    'booking_number' => Booking::generateBookingNumber($tenant->id),
+                    'booking_date' => $validated['booking_date'],
+                    'participant_count' => $validated['participant_count'],
+                    'subtotal' => $subtotal,
+                    'discount_amount' => 0,
+                    'tax_amount' => 0, // Calculate based on tenant settings
+                    'total_amount' => $subtotal,
+                    'amount_paid' => 0,
+                    'special_requests' => $validated['special_requests'] ?? null,
+                    'internal_notes' => $validated['internal_notes'] ?? null,
+                    'source' => $validated['source'],
+                    'status' => 'pending',
+                    'payment_status' => 'unpaid',
+                    'created_by' => auth()->id(),
                 ]);
-            }
-        }
 
-        return redirect()
-            ->route('admin.bookings.show', $booking)
-            ->with('success', 'Booking created successfully.');
+                // Create participants
+                if (isset($validated['participants'])) {
+                    foreach ($validated['participants'] as $participant) {
+                        BookingParticipant::create([
+                            'booking_id' => $booking->id,
+                            'name' => $participant['name'],
+                            'email' => $participant['email'] ?? null,
+                            'certification_level' => $participant['certification_level'] ?? null,
+                        ]);
+                    }
+                }
+
+                return $booking;
+            });
+
+            return redirect()
+                ->route('admin.bookings.show', $booking)
+                ->with('success', 'Booking created successfully.');
+
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->withErrors(['booking' => $e->getMessage()]);
+        }
     }
 
     public function show(Booking $booking): Response
@@ -283,23 +312,54 @@ class BookingController extends Controller
             'status' => 'required|in:pending,confirmed,checked_in,completed,cancelled,no_show',
         ]);
 
-        // Recalculate pricing if participant count changed
-        if ($validated['participant_count'] !== $booking->participant_count) {
-            $product = Product::findOrFail($validated['product_id']);
-            $location = $this->tenantService->getCurrentLocation();
+        try {
+            \DB::transaction(function () use ($booking, $validated) {
+                $location = $this->tenantService->getCurrentLocation();
 
-            $pricePerPerson = $location
-                ? $product->getPriceForLocation($location->id)
-                : $product->price;
-            $validated['subtotal'] = $pricePerPerson * $validated['participant_count'];
-            $validated['total_amount'] = $validated['subtotal'] - $booking->discount_amount + $booking->tax_amount;
+                // Check if schedule is changing or participant count is increasing
+                $scheduleChanged = ($validated['schedule_id'] ?? null) !== $booking->schedule_id;
+                $participantIncreased = $validated['participant_count'] > $booking->participant_count;
+
+                if (($scheduleChanged || $participantIncreased) && isset($validated['schedule_id'])) {
+                    // Lock the schedule and check availability
+                    $schedule = Schedule::lockForUpdate()->findOrFail($validated['schedule_id']);
+
+                    $bookedCount = $schedule->bookings()
+                        ->whereNotIn('status', ['cancelled', 'no_show'])
+                        ->where('id', '!=', $booking->id) // Exclude current booking
+                        ->sum('participant_count');
+
+                    $available = $schedule->max_participants - $bookedCount;
+
+                    if ($validated['participant_count'] > $available) {
+                        throw new \Exception("Only {$available} spots available on this schedule.");
+                    }
+                }
+
+                // Recalculate pricing if participant count changed
+                if ($validated['participant_count'] !== $booking->participant_count) {
+                    $product = Product::findOrFail($validated['product_id']);
+
+                    $pricePerPerson = $location
+                        ? $product->getPriceForLocation($location->id)
+                        : $product->price;
+                    $validated['subtotal'] = $pricePerPerson * $validated['participant_count'];
+                    $validated['total_amount'] = $validated['subtotal'] - $booking->discount_amount + $booking->tax_amount;
+                }
+
+                $booking->update($validated);
+            });
+
+            return redirect()
+                ->route('admin.bookings.show', $booking)
+                ->with('success', 'Booking updated successfully.');
+
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->withErrors(['booking' => $e->getMessage()]);
         }
-
-        $booking->update($validated);
-
-        return redirect()
-            ->route('admin.bookings.show', $booking)
-            ->with('success', 'Booking updated successfully.');
     }
 
     public function checkIn(Booking $booking): RedirectResponse

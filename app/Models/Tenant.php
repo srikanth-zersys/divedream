@@ -96,6 +96,38 @@ class Tenant extends Model
         return $this->hasMany(ActivityLog::class);
     }
 
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(SubscriptionInvoice::class);
+    }
+
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
+    }
+
+    public function referralSettings()
+    {
+        return $this->hasOne(ReferralSettings::class);
+    }
+
+    // Subscription helpers
+
+    public function activeSubscription(): ?Subscription
+    {
+        return $this->subscriptions()->active()->latest()->first();
+    }
+
+    public function subscriptionPlan(): ?SubscriptionPlan
+    {
+        return $this->activeSubscription()?->plan;
+    }
+
     // Helpers
 
     public function isOnTrial(): bool

@@ -7,12 +7,16 @@ use App\Models\Equipment;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Member;
+use App\Models\Product;
+use App\Models\Quote;
 use App\Models\Schedule;
 use App\Policies\BookingPolicy;
 use App\Policies\EquipmentPolicy;
 use App\Policies\InstructorPolicy;
 use App\Policies\LocationPolicy;
 use App\Policies\MemberPolicy;
+use App\Policies\ProductPolicy;
+use App\Policies\QuotePolicy;
 use App\Policies\SchedulePolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
@@ -28,6 +32,8 @@ class AuthServiceProvider extends ServiceProvider
         Equipment::class => EquipmentPolicy::class,
         Schedule::class => SchedulePolicy::class,
         Location::class => LocationPolicy::class,
+        Product::class => ProductPolicy::class,
+        Quote::class => QuotePolicy::class,
     ];
 
     /**
