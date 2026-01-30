@@ -238,22 +238,24 @@ const Confirmation: React.FC<Props> = ({ booking }) => {
             {/* Actions */}
             <div className="p-6 bg-gray-50">
               <div className="flex flex-col sm:flex-row gap-3">
-                {booking.payment_status !== 'paid' && (
+                {booking.payment_status !== 'fully_paid' && booking.access_token && (
                   <Link
-                    href={`/portal/booking/${booking.id}/pay`}
+                    href={`/booking/${booking.access_token}`}
                     className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     <CreditCard className="w-4 h-4" />
                     Pay Now
                   </Link>
                 )}
-                <Link
-                  href={`/portal/booking/${booking.id}`}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  Manage Booking
-                </Link>
+                {booking.access_token && (
+                  <Link
+                    href={`/booking/${booking.access_token}`}
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Manage Booking
+                  </Link>
+                )}
               </div>
             </div>
           </div>

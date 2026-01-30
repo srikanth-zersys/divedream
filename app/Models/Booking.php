@@ -296,8 +296,12 @@ class Booking extends Model
         ]);
     }
 
-    public function checkIn(): void
+    public function checkIn(?int $userId = null): void
     {
+        if (!in_array($this->status, ['confirmed', 'pending'])) {
+            throw new \InvalidArgumentException('Only confirmed or pending bookings can be checked in.');
+        }
+
         $this->update([
             'status' => 'checked_in',
             'checked_in_at' => now(),
@@ -309,7 +313,18 @@ class Booking extends Model
         }
     }
 
-    public function cancel(int $userId = null, string $reason = null): void
+    public function checkOut(?int $userId = null): void
+    {
+        if ($this->status !== 'checked_in') {
+            throw new \InvalidArgumentException('Only checked-in bookings can be checked out.');
+        }
+
+        $this->update([
+            'status' => 'completed',
+        ]);
+    }
+
+    public function cancel(?string $reason = null, ?int $userId = null): void
     {
         $this->update([
             'status' => 'cancelled',
@@ -482,5 +497,13 @@ class Booking extends Model
     public function getRemainingBalance(): float
     {
         return max(0, $this->total_amount - $this->amount_paid + $this->amount_refunded);
+    }
+
+    /**
+     * Get the amount that can be refunded
+     */
+    public function getRefundableAmount(): float
+    {
+        return max(0, $this->amount_paid - $this->amount_refunded);
     }
 }

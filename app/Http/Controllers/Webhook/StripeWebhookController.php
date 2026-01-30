@@ -73,6 +73,19 @@ class StripeWebhookController extends Controller
             return response('Booking not found', 200);
         }
 
+        // Idempotency check - prevent duplicate payment records
+        $existingPayment = Payment::where('stripe_payment_intent_id', $paymentIntent->id)
+            ->where('status', 'succeeded')
+            ->first();
+
+        if ($existingPayment) {
+            Log::info('Payment already recorded, skipping duplicate', [
+                'payment_intent_id' => $paymentIntent->id,
+                'payment_id' => $existingPayment->id,
+            ]);
+            return response('Payment already recorded', 200);
+        }
+
         // Record the payment
         $payment = Payment::create([
             'tenant_id' => $booking->tenant_id,
@@ -80,26 +93,38 @@ class StripeWebhookController extends Controller
             'member_id' => $booking->member_id,
             'amount' => $paymentIntent->amount / 100,
             'currency' => strtoupper($paymentIntent->currency),
-            'payment_method' => 'stripe',
-            'payment_type' => 'card',
-            'status' => 'completed',
+            'method' => 'stripe',
+            'type' => 'payment',
+            'status' => 'succeeded',
             'stripe_payment_intent_id' => $paymentIntent->id,
             'stripe_charge_id' => $paymentIntent->latest_charge,
-            'paid_at' => now(),
-            'metadata' => [
+            'stripe_metadata' => [
                 'stripe_payment_method' => $paymentIntent->payment_method,
                 'receipt_url' => $paymentIntent->charges?->data[0]?->receipt_url,
             ],
         ]);
 
-        // Update booking
+        // Update booking with correct payment status enum values
         $amountPaid = $booking->amount_paid + $payment->amount;
         $balanceDue = max(0, $booking->total_amount - $amountPaid);
+
+        // Determine payment status using correct enum values
+        $paymentStatus = 'unpaid';
+        if ($balanceDue <= 0) {
+            $paymentStatus = 'fully_paid';
+        } elseif ($amountPaid > 0) {
+            // Check if only deposit was paid
+            if ($booking->deposit_amount > 0 && $amountPaid >= $booking->deposit_amount) {
+                $paymentStatus = 'deposit_paid';
+            } else {
+                $paymentStatus = 'partially_paid';
+            }
+        }
 
         $booking->update([
             'amount_paid' => $amountPaid,
             'balance_due' => $balanceDue,
-            'payment_status' => $balanceDue <= 0 ? 'paid' : 'partial',
+            'payment_status' => $paymentStatus,
             'status' => $booking->status === 'pending' ? 'confirmed' : $booking->status,
             'confirmed_at' => $booking->confirmed_at ?? now(),
         ]);
@@ -138,11 +163,12 @@ class StripeWebhookController extends Controller
                 'member_id' => $booking->member_id,
                 'amount' => $paymentIntent->amount / 100,
                 'currency' => strtoupper($paymentIntent->currency),
-                'payment_method' => 'stripe',
+                'method' => 'stripe',
+                'type' => 'payment',
                 'status' => 'failed',
                 'stripe_payment_intent_id' => $paymentIntent->id,
                 'failure_reason' => $paymentIntent->last_payment_error?->message,
-                'metadata' => [
+                'stripe_metadata' => [
                     'error_code' => $paymentIntent->last_payment_error?->code,
                     'error_type' => $paymentIntent->last_payment_error?->type,
                 ],
@@ -162,7 +188,9 @@ class StripeWebhookController extends Controller
      */
     protected function handleChargeRefunded($charge)
     {
-        $payment = Payment::where('stripe_charge_id', $charge->id)->first();
+        $payment = Payment::where('stripe_charge_id', $charge->id)
+            ->where('status', 'succeeded')
+            ->first();
 
         if (!$payment) {
             Log::info('Refund received but no matching payment found', ['charge_id' => $charge->id]);
@@ -171,30 +199,58 @@ class StripeWebhookController extends Controller
 
         $refundAmount = $charge->amount_refunded / 100;
 
+        // Get the latest refund ID for idempotency check
+        $latestRefundId = $charge->refunds?->data[0]?->id;
+
+        // Idempotency check - prevent duplicate refund records
+        if ($latestRefundId) {
+            $existingRefund = Payment::where('stripe_refund_id', $latestRefundId)->first();
+            if ($existingRefund) {
+                Log::info('Refund already recorded, skipping duplicate', [
+                    'refund_id' => $latestRefundId,
+                    'payment_id' => $existingRefund->id,
+                ]);
+                return response('Refund already recorded', 200);
+            }
+        }
+
         // Create refund record
         Payment::create([
             'tenant_id' => $payment->tenant_id,
             'booking_id' => $payment->booking_id,
             'member_id' => $payment->member_id,
-            'amount' => -$refundAmount,
+            'amount' => $refundAmount,
             'currency' => $payment->currency,
-            'payment_method' => 'stripe',
-            'payment_type' => 'refund',
-            'status' => 'completed',
+            'method' => 'stripe',
+            'type' => 'refund',
+            'status' => 'succeeded',
             'stripe_charge_id' => $charge->id,
-            'paid_at' => now(),
-            'metadata' => [
-                'original_payment_id' => $payment->id,
+            'stripe_refund_id' => $latestRefundId,
+            'original_payment_id' => $payment->id,
+            'stripe_metadata' => [
                 'refund_reason' => $charge->refunds?->data[0]?->reason,
             ],
         ]);
 
         // Update booking balance
         if ($payment->booking) {
-            $payment->booking->update([
-                'amount_paid' => $payment->booking->amount_paid - $refundAmount,
-                'balance_due' => $payment->booking->balance_due + $refundAmount,
-                'payment_status' => 'refunded',
+            $booking = $payment->booking;
+            $amountRefunded = $booking->amount_refunded + $refundAmount;
+            $netPaid = $booking->amount_paid - $amountRefunded;
+            $balanceDue = max(0, $booking->total_amount - $netPaid);
+
+            // Determine payment status
+            $paymentStatus = 'unpaid';
+            if ($netPaid >= $booking->total_amount) {
+                $paymentStatus = 'fully_paid';
+            } elseif ($netPaid > 0) {
+                $paymentStatus = 'partially_paid';
+            }
+
+            $booking->update([
+                'amount_refunded' => $amountRefunded,
+                'balance_due' => $balanceDue,
+                'payment_status' => $paymentStatus,
             ]);
         }
 
@@ -224,7 +280,7 @@ class StripeWebhookController extends Controller
             $booking->update([
                 'amount_paid' => $booking->total_amount,
                 'balance_due' => 0,
-                'payment_status' => 'paid',
+                'payment_status' => 'fully_paid',
                 'status' => 'confirmed',
                 'confirmed_at' => now(),
             ]);

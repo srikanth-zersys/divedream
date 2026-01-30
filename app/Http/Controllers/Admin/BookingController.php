@@ -224,6 +224,11 @@ class BookingController extends Controller
                     }
                 }
 
+                // Increment schedule booked count to prevent overbooking
+                if ($schedule) {
+                    $schedule->incrementBookedCount($validated['participant_count']);
+                }
+
                 return $booking;
             });
 
@@ -317,14 +322,18 @@ class BookingController extends Controller
         try {
             \DB::transaction(function () use ($booking, $validated) {
                 $location = $this->tenantService->getCurrentLocation();
+                $oldScheduleId = $booking->schedule_id;
+                $oldParticipantCount = $booking->participant_count;
+                $newScheduleId = $validated['schedule_id'] ?? null;
+                $newParticipantCount = $validated['participant_count'];
 
                 // Check if schedule is changing or participant count is increasing
-                $scheduleChanged = ($validated['schedule_id'] ?? null) !== $booking->schedule_id;
-                $participantIncreased = $validated['participant_count'] > $booking->participant_count;
+                $scheduleChanged = $newScheduleId !== $oldScheduleId;
+                $participantIncreased = $newParticipantCount > $oldParticipantCount;
 
-                if (($scheduleChanged || $participantIncreased) && isset($validated['schedule_id'])) {
+                if (($scheduleChanged || $participantIncreased) && $newScheduleId) {
                     // Lock the schedule and check availability
-                    $schedule = Schedule::lockForUpdate()->findOrFail($validated['schedule_id']);
+                    $schedule = Schedule::lockForUpdate()->findOrFail($newScheduleId);
 
                     $bookedCount = $schedule->bookings()
                         ->whereNotIn('status', ['cancelled', 'no_show'])
@@ -333,23 +342,47 @@ class BookingController extends Controller
 
                     $available = $schedule->max_participants - $bookedCount;
 
-                    if ($validated['participant_count'] > $available) {
+                    if ($newParticipantCount > $available) {
                         throw new \Exception("Only {$available} spots available on this schedule.");
                     }
                 }
 
                 // Recalculate pricing if participant count changed
-                if ($validated['participant_count'] !== $booking->participant_count) {
+                if ($newParticipantCount !== $oldParticipantCount) {
                     $product = Product::findOrFail($validated['product_id']);
 
                     $pricePerPerson = $location
                         ? $product->getPriceForLocation($location->id)
                         : $product->price;
-                    $validated['subtotal'] = $pricePerPerson * $validated['participant_count'];
+                    $validated['subtotal'] = $pricePerPerson * $newParticipantCount;
                     $validated['total_amount'] = $validated['subtotal'] - $booking->discount_amount + $booking->tax_amount;
                 }
 
                 $booking->update($validated);
+
+                // Update schedule booked counts if schedule or participant count changed
+                if (!in_array($validated['status'], ['cancelled', 'no_show'])) {
+                    // Decrement old schedule if it existed and booking was not already cancelled
+                    if ($oldScheduleId && !in_array($booking->getOriginal('status'), ['cancelled', 'no_show'])) {
+                        if ($scheduleChanged) {
+                            // Moving to different schedule - remove from old
+                            Schedule::find($oldScheduleId)?->decrementBookedCount($oldParticipantCount);
+                        } elseif ($newParticipantCount !== $oldParticipantCount) {
+                            // Same schedule but different count - adjust
+                            $diff = $newParticipantCount - $oldParticipantCount;
+                            if ($diff > 0) {
+                                Schedule::find($oldScheduleId)?->incrementBookedCount($diff);
+                            } else {
+                                Schedule::find($oldScheduleId)?->decrementBookedCount(abs($diff));
+                            }
+                        }
+                    }
+
+                    // Increment new schedule if changing schedules
+                    if ($scheduleChanged && $newScheduleId) {
+                        Schedule::find($newScheduleId)?->incrementBookedCount($newParticipantCount);
+                    }
+                }
             });
 
             return redirect()

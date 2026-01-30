@@ -86,7 +86,7 @@
                 @endif
 
                 <div class="cta">
-                    <a href="{{ url('/portal/booking/' . $booking->id) }}" class="btn">
+                    <a href="{{ url('/booking/' . $booking->access_token) }}" class="btn">
                         View Booking Details
                     </a>
                 </div>
