@@ -91,56 +91,8 @@ class BookingViewController extends Controller
             ],
             'tenant' => $booking->tenant->only(['name', 'logo_url', 'phone', 'email', 'website']),
             'canCancel' => $booking->canBeCancelled(),
-            'canSignWaiver' => !$booking->waiver_completed && in_array($booking->status, ['pending', 'confirmed']),
             'needsPayment' => $booking->needsPayment(),
         ]);
-    }
-
-    /**
-     * Sign waiver for a booking
-     */
-    public function signWaiver(Request $request, string $token): RedirectResponse
-    {
-        $booking = Booking::where('access_token', $token)->firstOrFail();
-
-        if ($booking->waiver_completed) {
-            return back()->with('info', 'Waiver has already been signed.');
-        }
-
-        $validated = $request->validate([
-            'signature' => 'required|string',
-            'agreed' => 'required|accepted',
-            'participant_id' => 'nullable|integer',
-        ]);
-
-        // If a specific participant
-        if ($validated['participant_id']) {
-            $participant = $booking->participants()->find($validated['participant_id']);
-            if ($participant) {
-                $participant->update([
-                    'waiver_signed' => true,
-                    'waiver_signed_at' => now(),
-                    'waiver_signature' => $validated['signature'],
-                ]);
-            }
-
-            // Check if all participants have signed
-            $allSigned = $booking->participants()->where('waiver_signed', false)->count() === 0;
-            if ($allSigned) {
-                $booking->update([
-                    'waiver_completed' => true,
-                    'waiver_completed_at' => now(),
-                ]);
-            }
-        } else {
-            // Sign for the whole booking
-            $booking->update([
-                'waiver_completed' => true,
-                'waiver_completed_at' => now(),
-            ]);
-        }
-
-        return back()->with('success', 'Waiver signed successfully. Thank you!');
     }
 
     /**

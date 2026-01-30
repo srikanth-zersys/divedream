@@ -9,13 +9,11 @@ import {
   CreditCard,
   CheckCircle,
   AlertCircle,
-  FileSignature,
   Phone,
   Mail,
   DollarSign,
   XCircle,
   MessageSquare,
-  Download,
 } from 'lucide-react';
 
 interface Booking {
@@ -36,8 +34,6 @@ interface Booking {
   balance_due: number;
   payment_status: string;
   currency: string;
-  waiver_completed: boolean;
-  waiver_completed_at?: string;
   customer_notes?: string;
   confirmed_at?: string;
   product?: {
@@ -65,8 +61,6 @@ interface Booking {
     id: number;
     first_name: string;
     last_name: string;
-    waiver_signed: boolean;
-    waiver_signed_at?: string;
   }>;
   payments: Array<{
     amount: number;
@@ -88,7 +82,6 @@ interface Props {
   booking: Booking;
   tenant: Tenant;
   canCancel: boolean;
-  canSignWaiver: boolean;
   needsPayment: boolean;
   flash?: { success?: string; error?: string; info?: string };
 }
@@ -97,16 +90,13 @@ const BookingView: React.FC<Props> = ({
   booking,
   tenant,
   canCancel,
-  canSignWaiver,
   needsPayment,
   flash,
 }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
 
   const cancelForm = useForm({ reason: '' });
-  const waiverForm = useForm({ signature: '', agreed: false, participant_id: '' });
   const noteForm = useForm({ note: '' });
 
   const formatDate = (dateStr: string) => {
@@ -149,13 +139,6 @@ const BookingView: React.FC<Props> = ({
     e.preventDefault();
     cancelForm.post(window.location.pathname + '/cancel', {
       onSuccess: () => setShowCancelModal(false),
-    });
-  };
-
-  const handleSignWaiver = (e: React.FormEvent) => {
-    e.preventDefault();
-    waiverForm.post(window.location.pathname + '/waiver', {
-      onSuccess: () => setShowWaiverModal(false),
     });
   };
 
@@ -236,26 +219,6 @@ const BookingView: React.FC<Props> = ({
                   </span>
                 </div>
 
-                {/* Waiver Status */}
-                <div className="flex items-center justify-between py-3 border-t border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <FileSignature className={`w-5 h-5 ${booking.waiver_completed ? 'text-green-600' : 'text-amber-500'}`} />
-                    <span className="text-gray-700">Liability Waiver</span>
-                  </div>
-                  {booking.waiver_completed ? (
-                    <span className="text-sm text-green-600 font-medium">Signed</span>
-                  ) : canSignWaiver ? (
-                    <button
-                      onClick={() => setShowWaiverModal(true)}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      Sign Now
-                    </button>
-                  ) : (
-                    <span className="text-sm text-amber-600 font-medium">Required</span>
-                  )}
-                </div>
-
                 {/* Payment Status */}
                 <div className="flex items-center justify-between py-3 border-t border-gray-100">
                   <div className="flex items-center gap-2">
@@ -271,6 +234,17 @@ const BookingView: React.FC<Props> = ({
                       ? 'Partially Paid'
                       : 'Payment Required'}
                   </span>
+                </div>
+
+                {/* What to bring reminder */}
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <div className="text-sm font-medium text-blue-800">What to bring</div>
+                  <ul className="text-sm text-blue-700 mt-1 list-disc list-inside">
+                    <li>Swimsuit and towel</li>
+                    <li>Sunscreen</li>
+                    <li>Photo ID (for waiver signing on arrival)</li>
+                    <li>Certification card (if applicable)</li>
+                  </ul>
                 </div>
               </div>
 
@@ -356,9 +330,9 @@ const BookingView: React.FC<Props> = ({
                 )}
 
                 {booking.schedule?.notes && (
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                    <div className="text-sm font-medium text-blue-800">Important Information</div>
-                    <div className="text-sm text-blue-700 mt-1">{booking.schedule.notes}</div>
+                  <div className="mt-4 p-4 bg-amber-50 rounded-lg">
+                    <div className="text-sm font-medium text-amber-800">Important Information</div>
+                    <div className="text-sm text-amber-700 mt-1">{booking.schedule.notes}</div>
                   </div>
                 )}
               </div>
@@ -369,7 +343,7 @@ const BookingView: React.FC<Props> = ({
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">Participants</h2>
                   <div className="divide-y divide-gray-100">
                     {booking.participants.map((participant, index) => (
-                      <div key={participant.id} className="flex items-center justify-between py-3">
+                      <div key={participant.id} className="flex items-center py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm font-medium text-gray-600">
                             {index + 1}
@@ -378,17 +352,12 @@ const BookingView: React.FC<Props> = ({
                             {participant.first_name} {participant.last_name}
                           </span>
                         </div>
-                        {participant.waiver_signed ? (
-                          <span className="text-sm text-green-600 flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
-                            Waiver Signed
-                          </span>
-                        ) : (
-                          <span className="text-sm text-amber-600">Waiver Required</span>
-                        )}
                       </div>
                     ))}
                   </div>
+                  <p className="mt-4 text-sm text-gray-500">
+                    All participants will sign the liability waiver on arrival at the dive center.
+                  </p>
                 </div>
               )}
             </div>
@@ -448,21 +417,12 @@ const BookingView: React.FC<Props> = ({
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
                 <div className="space-y-3">
-                  {canSignWaiver && (
-                    <button
-                      onClick={() => setShowWaiverModal(true)}
-                      className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
-                    >
-                      <FileSignature className="w-5 h-5" />
-                      Sign Waiver
-                    </button>
-                  )}
                   <button
                     onClick={() => setShowNoteModal(true)}
                     className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
                   >
                     <MessageSquare className="w-5 h-5" />
-                    Add Note
+                    Add Note / Special Request
                   </button>
                   {canCancel && (
                     <button
@@ -539,76 +499,6 @@ const BookingView: React.FC<Props> = ({
                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                   >
                     {cancelForm.processing ? 'Cancelling...' : 'Cancel Booking'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Waiver Modal */}
-        {showWaiverModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Sign Liability Waiver</h3>
-              <div className="bg-gray-50 p-4 rounded-lg mb-4 max-h-48 overflow-y-auto text-sm text-gray-600">
-                <p className="mb-2">
-                  By signing this waiver, I acknowledge that I understand the risks involved in scuba
-                  diving and related activities. I agree to follow all safety instructions provided
-                  by the dive center and its staff.
-                </p>
-                <p className="mb-2">
-                  I confirm that I am in good health and have no medical conditions that would prevent
-                  me from safely participating in diving activities.
-                </p>
-                <p>
-                  I release the dive center, its employees, and agents from any liability for injury
-                  or damage that may occur during my participation.
-                </p>
-              </div>
-              <form onSubmit={handleSignWaiver}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type your full name as signature *
-                  </label>
-                  <input
-                    type="text"
-                    value={waiverForm.data.signature}
-                    onChange={(e) => waiverForm.setData('signature', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg font-cursive text-lg"
-                    placeholder="Your Full Name"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={waiverForm.data.agreed}
-                      onChange={(e) => waiverForm.setData('agreed', e.target.checked)}
-                      className="mt-1 rounded border-gray-300 text-blue-600"
-                      required
-                    />
-                    <span className="text-sm text-gray-600">
-                      I have read and agree to the liability waiver above. I understand the risks
-                      involved and accept full responsibility for my participation.
-                    </span>
-                  </label>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowWaiverModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={waiverForm.processing || !waiverForm.data.agreed || !waiverForm.data.signature}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {waiverForm.processing ? 'Signing...' : 'Sign Waiver'}
                   </button>
                 </div>
               </form>

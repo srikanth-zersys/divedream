@@ -81,7 +81,6 @@ Route::prefix('booking')->name('booking.')->group(function () {
 
     // Token-based booking access (magic links)
     Route::get('/{token}', [BookingViewController::class, 'show'])->name('view');
-    Route::post('/{token}/waiver', [BookingViewController::class, 'signWaiver'])->name('sign-waiver');
     Route::post('/{token}/cancel', [BookingViewController::class, 'cancel'])->name('cancel');
     Route::post('/{token}/pay', [BookingViewController::class, 'payBalance'])->name('pay');
     Route::post('/{token}/note', [BookingViewController::class, 'addNote'])->name('add-note');
