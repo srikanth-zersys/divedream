@@ -127,7 +127,6 @@ const menu: MegaMenu[] = [
             { title: "Notifications", link: "/admin/settings/notifications" },
             { title: "Payments", link: "/admin/settings/payments" },
             { title: "Team", link: "/admin/settings/team" },
-            { title: "Waivers", link: "/admin/settings/waivers" },
             { title: "Email", link: "/admin/settings/email" },
             { title: "Billing", link: "/admin/settings/billing" },
         ]

@@ -63,9 +63,10 @@ class BookingController extends Controller
             $query->where('payment_status', $request->payment_status);
         }
 
-        // Default: upcoming bookings first
-        $sortField = $request->get('sort', 'booking_date');
-        $sortDirection = $request->get('direction', 'asc');
+        // Sort with whitelist validation to prevent SQL injection
+        $allowedSortFields = ['booking_date', 'created_at', 'total_amount', 'status', 'payment_status'];
+        $sortField = in_array($request->get('sort'), $allowedSortFields) ? $request->get('sort') : 'booking_date';
+        $sortDirection = $request->get('direction') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortField, $sortDirection);
 
         $bookings = $query->paginate(20)->withQueryString();

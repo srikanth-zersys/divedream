@@ -234,7 +234,7 @@ class BookingController extends Controller
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'date' => 'required|date|after_or_equal:today',
-            'participants' => 'required|integer|min:1',
+            'participants' => 'required|integer|min:1|max:50',
         ]);
 
         $schedules = Schedule::forTenant($tenant->id)

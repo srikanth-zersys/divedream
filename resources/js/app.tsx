@@ -16,6 +16,7 @@ import { initialState } from './slices/layout/reducer';
 import { getPreviousThemeData } from './slices/layout/utils';
 import { changeDarkModeClass, changeDataColor, changeDirection, changeLayout, changeLayoutContentWidth, changeLayoutLanguage, changeLayoutMode, changeModernNavigation, changeSidebarColor, changeSidebarSize } from './slices/thunk';
 import { I18nProvider } from './i18n';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const appName = process.env.APP_NAME;
 
@@ -63,10 +64,12 @@ createInertiaApp({
 
         root.render(
             <Provider store={store}>
-                <I18nProvider>
-                    <ThemeInitializer />
-                    <App {...props} />
-                </I18nProvider>
+                <ErrorBoundary>
+                    <I18nProvider>
+                        <ThemeInitializer />
+                        <App {...props} />
+                    </I18nProvider>
+                </ErrorBoundary>
             </Provider>
         );
     },

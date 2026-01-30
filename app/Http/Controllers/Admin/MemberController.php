@@ -49,9 +49,10 @@ class MemberController extends Controller
             });
         }
 
-        // Sort
-        $sortField = $request->get('sort', 'created_at');
-        $sortDirection = $request->get('direction', 'desc');
+        // Sort with whitelist validation to prevent SQL injection
+        $allowedSortFields = ['created_at', 'first_name', 'last_name', 'email', 'total_dives'];
+        $sortField = in_array($request->get('sort'), $allowedSortFields) ? $request->get('sort') : 'created_at';
+        $sortDirection = $request->get('direction') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortField, $sortDirection);
 
         $members = $query->paginate(20)->withQueryString();

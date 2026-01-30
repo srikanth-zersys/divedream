@@ -128,16 +128,8 @@ Route::prefix('referral')->name('public.referral.')->group(function () {
 // Referral link redirect (short URL)
 Route::get('/r/{code}', [ReferralController::class, 'handleClick'])->name('public.referral.click');
 
-// Customer portal
-Route::prefix('portal')->name('portal.')->middleware('auth')->group(function () {
-    Route::get('/', [PortalController::class, 'dashboard'])->name('index');
-    Route::get('/bookings', [PortalController::class, 'bookings'])->name('bookings');
-    Route::get('/booking/{booking}', [PortalController::class, 'booking'])->name('booking');
-    Route::get('/profile', [PortalController::class, 'profile'])->name('profile');
-    Route::put('/profile', [PortalController::class, 'updateProfile'])->name('profile.update');
-    Route::post('/booking/{booking}/waiver', [PortalController::class, 'signWaiver'])->name('sign-waiver');
-    Route::post('/booking/{booking}/cancel', [PortalController::class, 'cancelBooking'])->name('cancel-booking');
-});
+// Note: Customer portal removed - customers use magic link access via /booking/{token}
+// See BookingViewController for booking management
 
 // Default route - redirect to login
 Route::get('/', [RouteController::class, 'signin']);
