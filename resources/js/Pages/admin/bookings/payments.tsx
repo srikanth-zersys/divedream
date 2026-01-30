@@ -137,6 +137,9 @@ const PaymentsIndex: React.FC<Props> = ({ payments, stats, filters }) => {
         setShowRefundModal(false);
         setSelectedPayment(null);
       },
+      onError: (errors) => {
+        console.error('Refund failed:', errors);
+      },
     });
   };
 

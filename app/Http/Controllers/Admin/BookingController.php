@@ -51,12 +51,13 @@ class BookingController extends Controller
             $query->where('product_id', $request->product_id);
         }
 
-        if ($request->filled('date_from')) {
-            $query->whereDate('booking_date', '>=', $request->date_from);
+        // Validate and apply date filters
+        if ($request->filled('date_from') && strtotime($request->date_from)) {
+            $query->whereDate('booking_date', '>=', date('Y-m-d', strtotime($request->date_from)));
         }
 
-        if ($request->filled('date_to')) {
-            $query->whereDate('booking_date', '<=', $request->date_to);
+        if ($request->filled('date_to') && strtotime($request->date_to)) {
+            $query->whereDate('booking_date', '<=', date('Y-m-d', strtotime($request->date_to)));
         }
 
         if ($request->filled('payment_status')) {

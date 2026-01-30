@@ -30,15 +30,15 @@ class ScheduleController extends Controller
             ->when($location, fn($q) => $q->forLocation($location->id))
             ->with(['product', 'instructor', 'boat', 'diveSite', 'location', 'bookings']);
 
-        // Date filter
-        if ($request->filled('date_from')) {
-            $query->whereDate('date', '>=', $request->date_from);
+        // Date filter with validation
+        if ($request->filled('date_from') && strtotime($request->date_from)) {
+            $query->whereDate('date', '>=', date('Y-m-d', strtotime($request->date_from)));
         } else {
             $query->whereDate('date', '>=', Carbon::today());
         }
 
-        if ($request->filled('date_to')) {
-            $query->whereDate('date', '<=', $request->date_to);
+        if ($request->filled('date_to') && strtotime($request->date_to)) {
+            $query->whereDate('date', '<=', date('Y-m-d', strtotime($request->date_to)));
         }
 
         // Product filter
@@ -226,9 +226,9 @@ class ScheduleController extends Controller
             'date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'nullable|date_format:H:i|after:start_time',
-            'max_participants' => 'required|integer|min:1',
+            'max_participants' => 'required|integer|min:1|max:100',
             'min_participants' => 'nullable|integer|min:0|lte:max_participants',
-            'price_override' => 'nullable|numeric|min:0',
+            'price_override' => 'nullable|numeric|min:0|max:99999',
             'notes' => 'nullable|string|max:1000',
             'internal_notes' => 'nullable|string|max:1000',
             'is_private' => 'boolean',
@@ -449,9 +449,9 @@ class ScheduleController extends Controller
             'date' => 'required|date',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'nullable|date_format:H:i|after:start_time',
-            'max_participants' => 'required|integer|min:1',
+            'max_participants' => 'required|integer|min:1|max:100',
             'min_participants' => 'nullable|integer|min:0|lte:max_participants',
-            'price_override' => 'nullable|numeric|min:0',
+            'price_override' => 'nullable|numeric|min:0|max:99999',
             'notes' => 'nullable|string|max:1000',
             'internal_notes' => 'nullable|string|max:1000',
             'is_private' => 'boolean',

@@ -79,6 +79,9 @@ const ReviewForm: React.FC<Props> = ({
       },
       {
         onFinish: () => setIsSubmitting(false),
+        onError: () => {
+          setIsSubmitting(false);
+        },
       }
     );
   };

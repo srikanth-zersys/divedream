@@ -255,6 +255,10 @@ const Checkout: React.FC<Props> = ({
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
       const result = await response.json();
 
       if (result.valid) {
@@ -308,6 +312,11 @@ const Checkout: React.FC<Props> = ({
           participant_count: participants,
         }),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Server error: ${response.status}`);
+      }
 
       const result = await response.json();
 
