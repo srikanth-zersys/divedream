@@ -260,4 +260,61 @@ class BookingViewController extends Controller
 
         return back()->with('success', 'Note added successfully.');
     }
+
+    /**
+     * Show booking lookup page
+     */
+    public function showLookup(Request $request): Response
+    {
+        // Get tenant from subdomain or default
+        $tenant = app(\App\Services\TenantService::class)->getCurrentTenant();
+
+        if (!$tenant) {
+            abort(404, 'Shop not found');
+        }
+
+        return Inertia::render('public/booking/lookup', [
+            'tenant' => $tenant->only(['name', 'logo_url']),
+        ]);
+    }
+
+    /**
+     * Process booking lookup and send magic links
+     */
+    public function processLookup(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'booking_number' => 'nullable|string',
+        ]);
+
+        $tenant = app(\App\Services\TenantService::class)->getCurrentTenant();
+
+        if (!$tenant) {
+            return back()->with('error', 'Shop not found.');
+        }
+
+        // Find bookings for this email
+        $query = Booking::where('tenant_id', $tenant->id)
+            ->where('customer_email', $validated['email'])
+            ->whereIn('status', ['pending', 'confirmed', 'checked_in']);
+
+        // If booking number provided, filter by it
+        if (!empty($validated['booking_number'])) {
+            $query->where('booking_number', $validated['booking_number']);
+        }
+
+        $bookings = $query->with(['product', 'schedule'])->get();
+
+        if ($bookings->isEmpty()) {
+            return back()->with('error', 'No bookings found for this email address.');
+        }
+
+        // Send magic links email
+        \Mail::to($validated['email'])->queue(
+            new \App\Mail\BookingAccessLinks($bookings, $tenant)
+        );
+
+        return back()->with('success', 'We\'ve sent booking access links to your email.');
+    }
 }

@@ -75,6 +75,11 @@ Route::prefix('quote')->name('quotes.')->group(function () {
 
 // Public booking viewing (magic link access for customers)
 Route::prefix('booking')->name('booking.')->group(function () {
+    // Booking lookup (must be before {token} route)
+    Route::get('/lookup', [BookingViewController::class, 'showLookup'])->name('lookup');
+    Route::post('/lookup', [BookingViewController::class, 'processLookup'])->name('lookup.process');
+
+    // Token-based booking access (magic links)
     Route::get('/{token}', [BookingViewController::class, 'show'])->name('view');
     Route::post('/{token}/waiver', [BookingViewController::class, 'signWaiver'])->name('sign-waiver');
     Route::post('/{token}/cancel', [BookingViewController::class, 'cancel'])->name('cancel');
