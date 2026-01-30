@@ -93,7 +93,7 @@ class StripeWebhookController extends Controller
             'member_id' => $booking->member_id,
             'amount' => $paymentIntent->amount / 100,
             'currency' => strtoupper($paymentIntent->currency),
-            'method' => 'stripe',
+            'method' => 'card',
             'type' => 'payment',
             'status' => 'succeeded',
             'stripe_payment_intent_id' => $paymentIntent->id,
@@ -109,16 +109,13 @@ class StripeWebhookController extends Controller
         $balanceDue = max(0, $booking->total_amount - $amountPaid);
 
         // Determine payment status using correct enum values
-        $paymentStatus = 'unpaid';
+        // Valid values: pending, deposit_paid, fully_paid, partially_refunded, fully_refunded, failed
+        $paymentStatus = 'pending';
         if ($balanceDue <= 0) {
             $paymentStatus = 'fully_paid';
         } elseif ($amountPaid > 0) {
-            // Check if only deposit was paid
-            if ($booking->deposit_amount > 0 && $amountPaid >= $booking->deposit_amount) {
-                $paymentStatus = 'deposit_paid';
-            } else {
-                $paymentStatus = 'partially_paid';
-            }
+            // Any partial payment is recorded as deposit_paid
+            $paymentStatus = 'deposit_paid';
         }
 
         $booking->update([
@@ -163,7 +160,7 @@ class StripeWebhookController extends Controller
                 'member_id' => $booking->member_id,
                 'amount' => $paymentIntent->amount / 100,
                 'currency' => strtoupper($paymentIntent->currency),
-                'method' => 'stripe',
+                'method' => 'card',
                 'type' => 'payment',
                 'status' => 'failed',
                 'stripe_payment_intent_id' => $paymentIntent->id,
@@ -221,7 +218,7 @@ class StripeWebhookController extends Controller
             'member_id' => $payment->member_id,
             'amount' => $refundAmount,
             'currency' => $payment->currency,
-            'method' => 'stripe',
+            'method' => 'card',
             'type' => 'refund',
             'status' => 'succeeded',
             'stripe_charge_id' => $charge->id,
@@ -239,12 +236,17 @@ class StripeWebhookController extends Controller
             $netPaid = $booking->amount_paid - $amountRefunded;
             $balanceDue = max(0, $booking->total_amount - $netPaid);
 
-            // Determine payment status
-            $paymentStatus = 'unpaid';
-            if ($netPaid >= $booking->total_amount) {
+            // Determine payment status after refund
+            // Valid values: pending, deposit_paid, fully_paid, partially_refunded, fully_refunded, failed
+            $paymentStatus = 'pending';
+            if ($netPaid <= 0) {
+                $paymentStatus = 'fully_refunded';
+            } elseif ($amountRefunded > 0) {
+                $paymentStatus = 'partially_refunded';
+            } elseif ($netPaid >= $booking->total_amount) {
                 $paymentStatus = 'fully_paid';
             } elseif ($netPaid > 0) {
-                $paymentStatus = 'partially_paid';
+                $paymentStatus = 'deposit_paid';
             }
 
             $booking->update([

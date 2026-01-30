@@ -501,7 +501,7 @@ class BookingController extends Controller
                     'source' => 'website',
                     // Pay at shop bookings are confirmed immediately (subject to review)
                     'status' => $paymentMethod === 'at_shop' ? 'confirmed' : 'pending',
-                    'payment_status' => 'unpaid',
+                    'payment_status' => 'pending',
                     'confirmed_at' => $paymentMethod === 'at_shop' ? now() : null,
                 ]);
 
@@ -527,6 +527,9 @@ class BookingController extends Controller
                         ]);
                     }
                 }
+
+                // Increment schedule booked count to prevent overbooking
+                $schedule->incrementBookedCount($validated['participant_count']);
 
                 return $booking;
             });

@@ -34,7 +34,7 @@ class CleanupExpiredBookings extends Command
         // Pay-at-shop bookings should NEVER be auto-cancelled
         // Industry best practice: customers paying at shop have confirmed bookings
         $expiredBookings = Booking::where('status', 'pending')
-            ->where('payment_status', 'unpaid')
+            ->where('payment_status', 'pending')
             ->where('payment_method', 'online') // Only online payment bookings
             ->whereNotNull('payment_due_date')
             ->where('payment_due_date', '<', now())
@@ -89,7 +89,7 @@ class CleanupExpiredBookings extends Command
 
             // Find pay-at-shop bookings for tomorrow that are still unpaid
             $upcomingUnpaid = Booking::whereIn('status', ['confirmed', 'pending'])
-                ->where('payment_status', 'unpaid')
+                ->where('payment_status', 'pending')
                 ->where('payment_method', 'at_shop')
                 ->whereDate('booking_date', '<=', now()->addDay())
                 ->whereDate('booking_date', '>=', now())

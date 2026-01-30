@@ -293,7 +293,7 @@ export interface Booking {
   internal_notes: string | null;
   source: 'admin' | 'website' | 'phone' | 'walk_in' | 'partner';
   status: 'pending' | 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'no_show';
-  payment_status: 'unpaid' | 'partial' | 'paid' | 'refunded';
+  payment_status: 'pending' | 'deposit_paid' | 'fully_paid' | 'partially_refunded' | 'fully_refunded' | 'failed';
   waiver_completed: boolean;
   waiver_completed_at: string | null;
   medical_form_completed: boolean;

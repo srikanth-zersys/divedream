@@ -110,7 +110,7 @@ class BookingViewController extends Controller
             'reason' => 'nullable|string|max:500',
         ]);
 
-        $booking->cancel(null, $validated['reason'] ?? 'Cancelled by customer');
+        $booking->cancel($validated['reason'] ?? 'Cancelled by customer', null);
 
         return back()->with('success', 'Your booking has been cancelled. We will process any applicable refunds within 5-7 business days.');
     }

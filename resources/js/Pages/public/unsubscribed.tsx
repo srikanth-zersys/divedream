@@ -80,8 +80,8 @@ const Unsubscribed: React.FC<Props> = ({ email, tenant, resubscribeUrl }) => {
           {/* Footer */}
           <p className="text-center text-sm text-gray-500 mt-6">
             Need help?{' '}
-            <Link href="/contact" className="text-blue-600 hover:text-blue-700">
-              Contact us
+            <Link href="/booking/lookup" className="text-blue-600 hover:text-blue-700">
+              Find your booking
             </Link>
           </p>
         </div>

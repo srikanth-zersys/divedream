@@ -195,7 +195,7 @@ class StripeService
 
         $booking->update([
             'amount_paid' => $totalPaid,
-            'payment_status' => $totalPaid >= $booking->total_amount ? 'paid' : 'partial',
+            'payment_status' => $totalPaid >= $booking->total_amount ? 'fully_paid' : 'deposit_paid',
             'status' => $booking->status === 'pending' ? 'confirmed' : $booking->status,
         ]);
 
@@ -239,9 +239,21 @@ class StripeService
             $totalRefunded = $booking->payments()->sum('refunded_amount');
             $netPaid = $totalPaid - $totalRefunded;
 
+            // Determine payment status after refund
+            $paymentStatus = 'pending';
+            if ($netPaid <= 0) {
+                $paymentStatus = 'fully_refunded';
+            } elseif ($totalRefunded > 0) {
+                $paymentStatus = 'partially_refunded';
+            } elseif ($netPaid >= $booking->total_amount) {
+                $paymentStatus = 'fully_paid';
+            } elseif ($netPaid > 0) {
+                $paymentStatus = 'deposit_paid';
+            }
+
             $booking->update([
                 'amount_paid' => $netPaid,
-                'payment_status' => $netPaid <= 0 ? 'refunded' : ($netPaid < $booking->total_amount ? 'partial' : 'paid'),
+                'payment_status' => $paymentStatus,
             ]);
 
             return $refund;

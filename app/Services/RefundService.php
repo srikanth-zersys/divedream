@@ -120,14 +120,16 @@ class RefundService
                 notes: $reason
             );
 
-            // Update booking status if full refund
+            // Update booking status based on refund
             if ($booking->fresh()->amount_paid <= 0) {
                 $booking->update([
-                    'payment_status' => 'refunded',
+                    'payment_status' => 'fully_refunded',
                 ]);
             } else {
-                // Partial refund - recalculate payment status
-                $booking->recalculatePayments();
+                // Partial refund
+                $booking->update([
+                    'payment_status' => 'partially_refunded',
+                ]);
             }
 
             // Log activity
@@ -316,7 +318,7 @@ class RefundService
         $reasons = [];
 
         // Check if already refunded
-        if ($booking->payment_status === 'refunded') {
+        if ($booking->payment_status === 'fully_refunded') {
             $eligible = false;
             $reasons[] = 'Booking already fully refunded';
         }

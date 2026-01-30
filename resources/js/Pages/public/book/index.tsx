@@ -368,7 +368,7 @@ const BookingLanding: React.FC<Props> = ({
                     </Link>
                   </li>
                   <li>
-                    <Link href="/portal" className="hover:text-white">
+                    <Link href="/booking/lookup" className="hover:text-white">
                       Manage Booking
                     </Link>
                   </li>

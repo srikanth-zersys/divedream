@@ -59,14 +59,39 @@ const Confirmation: React.FC<Props> = ({ booking }) => {
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case 'paid':
+      case 'fully_paid':
         return 'bg-green-100 text-green-800';
-      case 'partial':
+      case 'deposit_paid':
         return 'bg-amber-100 text-amber-800';
-      case 'unpaid':
+      case 'partially_refunded':
+        return 'bg-amber-100 text-amber-800';
+      case 'fully_refunded':
+        return 'bg-gray-100 text-gray-800';
+      case 'pending':
+        return 'bg-red-100 text-red-800';
+      case 'failed':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getPaymentStatusLabel = (status: string) => {
+    switch (status) {
+      case 'fully_paid':
+        return 'Paid';
+      case 'deposit_paid':
+        return 'Deposit Paid';
+      case 'partially_refunded':
+        return 'Partially Refunded';
+      case 'fully_refunded':
+        return 'Refunded';
+      case 'pending':
+        return 'Unpaid';
+      case 'failed':
+        return 'Failed';
+      default:
+        return status;
     }
   };
 
@@ -106,7 +131,7 @@ const Confirmation: React.FC<Props> = ({ booking }) => {
                     {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                   </span>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPaymentStatusColor(booking.payment_status)}`}>
-                    {booking.payment_status === 'paid' ? 'Paid' : booking.payment_status === 'partial' ? 'Partially Paid' : 'Unpaid'}
+                    {getPaymentStatusLabel(booking.payment_status)}
                   </span>
                 </div>
               </div>

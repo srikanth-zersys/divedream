@@ -47,7 +47,7 @@ class PaymentController extends Controller
         );
 
         // If deposit or more is paid, confirm the booking
-        if ($booking->payment_status !== 'unpaid' && $booking->status === 'pending') {
+        if ($booking->payment_status !== 'pending' && $booking->status === 'pending') {
             $booking->confirm();
         }
 

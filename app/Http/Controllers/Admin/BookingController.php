@@ -208,7 +208,7 @@ class BookingController extends Controller
                     'internal_notes' => $validated['internal_notes'] ?? null,
                     'source' => $validated['source'],
                     'status' => 'pending',
-                    'payment_status' => 'unpaid',
+                    'payment_status' => 'pending',
                     'created_by' => auth()->id(),
                 ]);
 
