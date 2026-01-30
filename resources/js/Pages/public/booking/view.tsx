@@ -230,8 +230,10 @@ const BookingView: React.FC<Props> = ({
                       ? 'Paid in Full'
                       : booking.payment_status === 'deposit_paid'
                       ? 'Deposit Paid'
-                      : booking.payment_status === 'partially_paid'
-                      ? 'Partially Paid'
+                      : booking.payment_status === 'partially_refunded'
+                      ? 'Partially Refunded'
+                      : booking.payment_status === 'fully_refunded'
+                      ? 'Refunded'
                       : 'Payment Required'}
                   </span>
                 </div>

@@ -65,12 +65,26 @@ const BookingsIndex: React.FC<Props> = ({ bookings, products, filters }) => {
 
   const getPaymentBadge = (status: string) => {
     const styles: Record<string, string> = {
-      unpaid: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      partial: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-      paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      refunded: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+      pending: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+      deposit_paid: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+      fully_paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      partially_refunded: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+      fully_refunded: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+      failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     };
-    return styles[status] || styles.unpaid;
+    return styles[status] || styles.pending;
+  };
+
+  const getPaymentLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      pending: 'Unpaid',
+      deposit_paid: 'Deposit Paid',
+      fully_paid: 'Paid',
+      partially_refunded: 'Partially Refunded',
+      fully_refunded: 'Refunded',
+      failed: 'Failed',
+    };
+    return labels[status] || status;
   };
 
   const hasActiveFilters = filters.status || filters.product_id || filters.date_from || filters.date_to || filters.payment_status;
@@ -224,10 +238,11 @@ const BookingsIndex: React.FC<Props> = ({ bookings, products, filters }) => {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">All</option>
-                    <option value="unpaid">Unpaid</option>
-                    <option value="partial">Partial</option>
-                    <option value="paid">Paid</option>
-                    <option value="refunded">Refunded</option>
+                    <option value="pending">Unpaid</option>
+                    <option value="deposit_paid">Deposit Paid</option>
+                    <option value="fully_paid">Paid</option>
+                    <option value="partially_refunded">Partially Refunded</option>
+                    <option value="fully_refunded">Refunded</option>
                   </select>
                 </div>
               </div>
@@ -368,7 +383,7 @@ const BookingsIndex: React.FC<Props> = ({ bookings, products, filters }) => {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentBadge(booking.payment_status)}`}>
-                          {booking.payment_status}
+                          {getPaymentLabel(booking.payment_status)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">

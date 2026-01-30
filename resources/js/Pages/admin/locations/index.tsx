@@ -38,7 +38,7 @@ interface Props {
 
 const LocationsIndex: React.FC<Props> = ({ locations }) => {
   const handleSwitch = (locationId: number) => {
-    router.post('/admin/locations/switch', { location_id: locationId });
+    router.post('/admin/switch-location', { location_id: locationId });
   };
 
   return (

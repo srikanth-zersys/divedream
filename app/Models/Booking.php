@@ -414,25 +414,31 @@ class Booking extends Model
 
     /**
      * Determine payment status based on amounts
+     * Valid values: pending, deposit_paid, fully_paid, partially_refunded, fully_refunded, failed
      */
     protected function determinePaymentStatus(float $paid, float $refunded): string
     {
         $net = $paid - $refunded;
 
+        // Check for refund states first
+        if ($refunded > 0) {
+            if ($net <= 0) {
+                return 'fully_refunded';
+            }
+            return 'partially_refunded';
+        }
+
+        // No refunds - check payment states
         if ($net <= 0) {
-            return 'unpaid';
+            return 'pending';
         }
 
         if ($net >= $this->total_amount) {
             return 'fully_paid';
         }
 
-        // Check if only deposit was paid
-        if ($this->deposit_amount > 0 && $net >= $this->deposit_amount && $net < $this->total_amount) {
-            return 'deposit_paid';
-        }
-
-        return 'partially_paid';
+        // Any partial payment is recorded as deposit_paid
+        return 'deposit_paid';
     }
 
     /**

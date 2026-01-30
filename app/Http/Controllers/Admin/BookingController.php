@@ -358,12 +358,20 @@ class BookingController extends Controller
                     $validated['total_amount'] = $validated['subtotal'] - $booking->discount_amount + $booking->tax_amount;
                 }
 
+                // Get original status before update
+                $oldStatus = $booking->status;
+                $wasActive = !in_array($oldStatus, ['cancelled', 'no_show']);
+                $willBeActive = !in_array($validated['status'], ['cancelled', 'no_show']);
+
                 $booking->update($validated);
 
-                // Update schedule booked counts if schedule or participant count changed
-                if (!in_array($validated['status'], ['cancelled', 'no_show'])) {
-                    // Decrement old schedule if it existed and booking was not already cancelled
-                    if ($oldScheduleId && !in_array($booking->getOriginal('status'), ['cancelled', 'no_show'])) {
+                // Update schedule booked counts based on status transitions
+                if ($oldScheduleId) {
+                    if ($wasActive && !$willBeActive) {
+                        // Transitioning from active to cancelled/no_show - decrement old schedule
+                        Schedule::find($oldScheduleId)?->decrementBookedCount($oldParticipantCount);
+                    } elseif ($wasActive && $willBeActive) {
+                        // Staying active - handle schedule/participant changes
                         if ($scheduleChanged) {
                             // Moving to different schedule - remove from old
                             Schedule::find($oldScheduleId)?->decrementBookedCount($oldParticipantCount);
@@ -376,12 +384,17 @@ class BookingController extends Controller
                                 Schedule::find($oldScheduleId)?->decrementBookedCount(abs($diff));
                             }
                         }
+                    } elseif (!$wasActive && $willBeActive) {
+                        // Transitioning from cancelled to active - increment schedule
+                        // Use new schedule if changed, otherwise old schedule
+                        $targetScheduleId = $newScheduleId ?? $oldScheduleId;
+                        Schedule::find($targetScheduleId)?->incrementBookedCount($newParticipantCount);
                     }
+                }
 
-                    // Increment new schedule if changing schedules
-                    if ($scheduleChanged && $newScheduleId) {
-                        Schedule::find($newScheduleId)?->incrementBookedCount($newParticipantCount);
-                    }
+                // Increment new schedule if changing schedules while staying active
+                if ($scheduleChanged && $newScheduleId && $wasActive && $willBeActive) {
+                    Schedule::find($newScheduleId)?->incrementBookedCount($newParticipantCount);
                 }
             });
 

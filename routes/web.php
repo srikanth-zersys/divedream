@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\InstructorController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\MemberController;
 use App\Http\Controllers\Admin\PaymentController;
+use App\Http\Controllers\PaymentController as StandalonePaymentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\QuoteController;
 use App\Http\Controllers\Admin\ReportsController;
@@ -161,6 +162,11 @@ Route::middleware(['auth:web', 'tenant'])->prefix('admin')->name('admin.')->grou
         Route::post('/{booking}/payments', [PaymentController::class, 'store'])->name('payments.store');
         Route::post('/{booking}/quick-pay', [PaymentController::class, 'quickPay'])->name('quick-pay');
         Route::post('/{booking}/record-deposit', [PaymentController::class, 'recordDeposit'])->name('record-deposit');
+    });
+
+    // Payments (standalone - for refunds by payment ID)
+    Route::prefix('payments')->name('payments.')->group(function () {
+        Route::post('/{payment}/refund', [StandalonePaymentController::class, 'refund'])->name('refund');
     });
 
     // Quotes/Proposals
