@@ -1,11 +1,12 @@
 import { defineConfig, loadEnv } from "vite";
 import laravel from "laravel-vite-plugin";
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig(({ mode }) => {
     // Load environment variables from .env file
     const env = loadEnv(mode, process.cwd(), '');
-    
+
     return {
         plugins: [
             laravel({
@@ -18,10 +19,10 @@ export default defineConfig(({ mode }) => {
             'process.env.APP_NAME': JSON.stringify(env.APP_NAME || 'Laravel Inertia App'),
             'process.env.BRAND_NAME': JSON.stringify(env.BRAND_NAME || 'Laravel'),
         },
-        resolve: {  
+        resolve: {
             alias: {
-                "@assets": "resources/",
-                "@": "resources/js/",
+                "@assets": path.resolve(__dirname, "resources"),
+                "@": path.resolve(__dirname, "resources/js"),
             }
         }
     };

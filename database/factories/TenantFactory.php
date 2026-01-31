@@ -12,18 +12,17 @@ class TenantFactory extends Factory
 
     public function definition(): array
     {
+        $company = fake()->unique()->company();
         return [
-            'name' => fake()->company(),
-            'slug' => Str::slug(fake()->unique()->company()),
+            'name' => $company,
+            'slug' => Str::slug($company),
+            'subdomain' => Str::slug($company),
             'email' => fake()->unique()->companyEmail(),
             'phone' => fake()->phoneNumber(),
-            'address' => fake()->address(),
-            'city' => fake()->city(),
-            'country' => fake()->country(),
             'timezone' => 'UTC',
             'currency' => 'USD',
             'plan' => 'starter',
-            'is_active' => true,
+            'status' => 'active',
             'settings' => [],
         ];
     }

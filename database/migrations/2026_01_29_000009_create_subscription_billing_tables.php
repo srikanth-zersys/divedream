@@ -25,9 +25,9 @@ return new class extends Migration
             $table->string('stripe_monthly_price_id')->nullable();
             $table->string('stripe_yearly_price_id')->nullable();
 
-            // Limits
-            $table->integer('max_locations')->default(1);
-            $table->integer('max_users')->default(3);
+            // Limits (null = unlimited)
+            $table->integer('max_locations')->nullable();
+            $table->integer('max_users')->nullable();
             $table->integer('max_bookings_per_month')->nullable(); // null = unlimited
             $table->integer('max_products')->nullable();
             $table->decimal('transaction_fee_percent', 5, 2)->default(0); // % per booking
