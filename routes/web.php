@@ -21,12 +21,14 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/page/404', [RouteController::class, 'pageNotFound'])->name('pageNotFound.page');
     Route::get('/page/500', [RouteController::class, 'serverError'])->name('serverError.page');
 
-    //user management
-    Route::get('/user-management', [UserController::class, 'userManagement'])->name('users.index');
-    Route::get('/user-management/create', [UserController::class, 'addUser'])->name('users.create');
-    Route::get('/user-management/edit/{id}', [UserController::class, 'EditUser'])->name('users.edit');
-    Route::post('/user-management/store', [UserController::class, 'store'])->name('users.store');
-    Route::post('/user-management/update', [UserController::class, 'update'])->name('users.update');
+    //user management (Admin only)
+    Route::middleware('role:Admin')->group(function () {
+        Route::get('/user-management', [UserController::class, 'userManagement'])->name('users.index');
+        Route::get('/user-management/create', [UserController::class, 'addUser'])->name('users.create');
+        Route::get('/user-management/edit/{id}', [UserController::class, 'EditUser'])->name('users.edit');
+        Route::post('/user-management/store', [UserController::class, 'store'])->name('users.store');
+        Route::post('/user-management/update', [UserController::class, 'update'])->name('users.update');
+    });
 
     //auth user profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
