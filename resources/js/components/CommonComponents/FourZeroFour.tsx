@@ -33,7 +33,7 @@ const FourZeroFour = () => {
                 This page doesn't exist or was removed. We suggest you contact
                 the admin or return to the homepage.
               </p>
-              <Link href="/index" className="btn btn-primary">
+              <Link href="/" className="btn btn-primary">
                 <Home className="inline-block size-4 ltr:mr-0.5 rtl:ml-0.5"></Home>{" "}
                 <span className="align-middle">Back to Home</span>
               </Link>

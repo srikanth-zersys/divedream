@@ -2,53 +2,94 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\TenantService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
-    /**
-     * The root template that is loaded on the first page visit.
-     *
-     * @var string
-     */
     protected $rootView = 'app';
 
-    /**
-     * Determine the current asset version.
-     */
+    public function __construct(
+        protected TenantService $tenantService
+    ) {}
+
     public function version(Request $request): ?string
     {
         return parent::version($request);
     }
 
-    /**
-     * Define the props that are shared by default.
-     *
-     * @return array<string, mixed>
-     */
     public function share(Request $request): array
     {
+        $tenant = $this->tenantService->getCurrentTenant();
+        $location = $this->tenantService->getCurrentLocation();
+        $accessibleLocations = $this->tenantService->getAccessibleLocations();
+
         return array_merge(parent::share($request), [
             'auth' => [
-                // Conditionally share user data only if logged in
                 'user' => $request->user() ? [
                     'id' => $request->user()->id,
-                    'name' => $request->user()->name, // Ensure you have a 'name' column/attribute
+                    'name' => $request->user()->name,
                     'email' => $request->user()->email,
+                    'avatar' => $request->user()->getAvatarUrl(),
+                    'initials' => $request->user()->getInitials(),
                     'role' => $request->user()->getRoleNames()->first(),
-                    // Add any other user fields you need in the frontend
+                    'roles' => $request->user()->getRoleNames()->toArray(),
+                    'permissions' => $request->user()->getAllPermissions()->pluck('name')->toArray(),
+                    'is_owner' => $request->user()->isOwner(),
+                    'is_admin' => $request->user()->isAdmin(),
+                    'is_instructor' => $request->user()->isInstructor(),
                 ] : null,
             ],
+
+            'tenant' => $tenant ? [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'slug' => $tenant->slug,
+                'logo' => $tenant->logo ? asset('storage/' . $tenant->logo) : null,
+                'plan' => $tenant->plan,
+                'is_single_location' => $tenant->isSingleLocation(),
+                'timezone' => $tenant->timezone,
+                'currency' => $tenant->currency,
+                'date_format' => $tenant->date_format,
+                'time_format' => $tenant->time_format,
+                'primary_color' => $tenant->primary_color,
+                'secondary_color' => $tenant->secondary_color,
+            ] : null,
+
+            'location' => $location ? [
+                'id' => $location->id,
+                'name' => $location->name,
+                'slug' => $location->slug,
+                'address' => $location->getFullAddress(),
+                'phone' => $location->phone,
+                'email' => $location->email,
+            ] : null,
+
+            'locations' => $accessibleLocations->map(fn($loc) => [
+                'id' => $loc->id,
+                'name' => $loc->name,
+                'slug' => $loc->slug,
+                'is_active' => $loc->is_active,
+            ])->toArray(),
+
+            'showLocationSwitcher' => $tenant && !$tenant->isSingleLocation() && $accessibleLocations->count() > 1,
+
             'ziggy' => [
                 'url' => $request->url(),
                 'location' => $request->url(),
             ],
-            // Add other shared data like flash messages if needed
+
             'flash' => [
                 'success' => fn() => $request->session()->get('success'),
                 'error' => fn() => $request->session()->get('error'),
-                // 'error_dealers' => $request->session()->get('error_dealers'),
+                'warning' => fn() => $request->session()->get('warning'),
+                'info' => fn() => $request->session()->get('info'),
+            ],
+
+            'app' => [
+                'name' => config('app.name'),
+                'version' => config('app.version', '1.0.0'),
             ],
         ]);
     }

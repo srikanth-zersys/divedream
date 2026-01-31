@@ -58,7 +58,7 @@ const SigninCreative: React.FC = () => {
 
                    showAlert(`You've successfully logged in!`, 'bg-green-100 text-green-500');
                     setTimeout(() => {
-                        router.visit('/sites'); 
+                        router.visit('/admin/dashboard');
                     }, 1000); 
             },
             onError: (pageErrors) => {
