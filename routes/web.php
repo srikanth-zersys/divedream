@@ -50,22 +50,22 @@ Route::prefix('book')->name('public.book.')->group(function () {
     Route::get('/products', [PublicBookingController::class, 'products'])->name('products');
     Route::get('/product/{product:slug}', [PublicBookingController::class, 'product'])->name('product');
     Route::get('/schedule/{schedule}', [PublicBookingController::class, 'schedule'])->name('schedule');
-    Route::post('/check-availability', [PublicBookingController::class, 'checkAvailability'])->name('check-availability');
-    Route::post('/validate-discount', [PublicBookingController::class, 'validateDiscount'])->name('validate-discount');
+    Route::post('/check-availability', [PublicBookingController::class, 'checkAvailability'])->name('check-availability')->middleware('throttle:public');
+    Route::post('/validate-discount', [PublicBookingController::class, 'validateDiscount'])->name('validate-discount')->middleware('throttle:validation');
     Route::get('/checkout', [PublicBookingController::class, 'checkout'])->name('checkout');
-    Route::post('/checkout', [PublicBookingController::class, 'processCheckout'])->name('process-checkout');
+    Route::post('/checkout', [PublicBookingController::class, 'processCheckout'])->name('process-checkout')->middleware('throttle:bookings');
     Route::get('/confirmation/{booking}', [PublicBookingController::class, 'confirmation'])->name('confirmation');
 });
 
 // Payment API (for Stripe integration)
-Route::prefix('payment')->name('public.payment.')->group(function () {
+Route::prefix('payment')->name('public.payment.')->middleware('throttle:payments')->group(function () {
     Route::get('/config', [PublicPaymentController::class, 'getPublishableKey'])->name('config');
     Route::post('/create-intent', [PublicPaymentController::class, 'createCheckoutPaymentIntent'])->name('create-intent');
     Route::post('/booking-intent', [PublicPaymentController::class, 'createPaymentIntent'])->name('booking-intent');
 });
 
 // Public quote viewing (for customers receiving quote emails)
-Route::prefix('quote')->name('quotes.')->group(function () {
+Route::prefix('quote')->name('quotes.')->middleware('throttle:forms')->group(function () {
     Route::get('/{token}', [QuoteViewController::class, 'show'])->name('public');
     Route::post('/{token}/accept', [QuoteViewController::class, 'accept'])->name('accept');
     Route::post('/{token}/reject', [QuoteViewController::class, 'reject'])->name('reject');
@@ -77,17 +77,17 @@ Route::prefix('quote')->name('quotes.')->group(function () {
 Route::prefix('booking')->name('booking.')->group(function () {
     // Booking lookup (must be before {token} route)
     Route::get('/lookup', [BookingViewController::class, 'showLookup'])->name('lookup');
-    Route::post('/lookup', [BookingViewController::class, 'processLookup'])->name('lookup.process');
+    Route::post('/lookup', [BookingViewController::class, 'processLookup'])->name('lookup.process')->middleware('throttle:forms');
 
     // Token-based booking access (magic links)
     Route::get('/{token}', [BookingViewController::class, 'show'])->name('view');
-    Route::post('/{token}/cancel', [BookingViewController::class, 'cancel'])->name('cancel');
-    Route::post('/{token}/pay', [BookingViewController::class, 'payBalance'])->name('pay');
-    Route::post('/{token}/note', [BookingViewController::class, 'addNote'])->name('add-note');
+    Route::post('/{token}/cancel', [BookingViewController::class, 'cancel'])->name('cancel')->middleware('throttle:forms');
+    Route::post('/{token}/pay', [BookingViewController::class, 'payBalance'])->name('pay')->middleware('throttle:payments');
+    Route::post('/{token}/note', [BookingViewController::class, 'addNote'])->name('add-note')->middleware('throttle:forms');
 });
 
 // Review collection (post-trip feedback)
-Route::prefix('review')->name('public.review.')->group(function () {
+Route::prefix('review')->name('public.review.')->middleware('throttle:forms')->group(function () {
     Route::get('/{token}', [ReviewController::class, 'show'])->name('show');
     Route::post('/{token}', [ReviewController::class, 'submit'])->name('submit');
     Route::get('/{token}/thank-you', [ReviewController::class, 'thankYou'])->name('thank-you');
@@ -96,7 +96,7 @@ Route::prefix('review')->name('public.review.')->group(function () {
 });
 
 // Abandoned cart recovery
-Route::prefix('cart')->name('public.cart.')->group(function () {
+Route::prefix('cart')->name('public.cart.')->middleware('throttle:forms')->group(function () {
     Route::get('/recover/{token}', [CartRecoveryController::class, 'recover'])->name('recover');
     Route::post('/track', [CartRecoveryController::class, 'track'])->name('track');
     Route::post('/complete', [CartRecoveryController::class, 'complete'])->name('complete');
@@ -106,7 +106,7 @@ Route::prefix('cart')->name('public.cart.')->group(function () {
 Route::get('/unsubscribe/{token}', [CartRecoveryController::class, 'unsubscribe'])->name('public.unsubscribe');
 
 // Lead capture and tracking
-Route::prefix('leads')->name('public.leads.')->group(function () {
+Route::prefix('leads')->name('public.leads.')->middleware('throttle:forms')->group(function () {
     Route::post('/capture', [LeadCaptureController::class, 'capture'])->name('capture');
     Route::post('/track', [LeadCaptureController::class, 'trackActivity'])->name('track');
     Route::post('/email/{type}', [LeadCaptureController::class, 'trackEmail'])->name('email');
@@ -119,10 +119,10 @@ Route::prefix('leads')->name('public.leads.')->group(function () {
 Route::prefix('referral')->name('public.referral.')->group(function () {
     Route::get('/program', [ReferralController::class, 'showProgram'])->name('program');
     Route::get('/settings', [ReferralController::class, 'getProgramSettings'])->name('settings');
-    Route::post('/link', [ReferralController::class, 'getMyReferralLink'])->name('link');
-    Route::post('/stats', [ReferralController::class, 'getMyStats'])->name('stats');
-    Route::post('/validate', [ReferralController::class, 'validateCode'])->name('validate');
-    Route::post('/share', [ReferralController::class, 'trackShare'])->name('share');
+    Route::post('/link', [ReferralController::class, 'getMyReferralLink'])->name('link')->middleware('throttle:forms');
+    Route::post('/stats', [ReferralController::class, 'getMyStats'])->name('stats')->middleware('throttle:forms');
+    Route::post('/validate', [ReferralController::class, 'validateCode'])->name('validate')->middleware('throttle:validation');
+    Route::post('/share', [ReferralController::class, 'trackShare'])->name('share')->middleware('throttle:forms');
 });
 
 // Referral link redirect (short URL)

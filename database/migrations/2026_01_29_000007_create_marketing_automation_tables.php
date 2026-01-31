@@ -181,19 +181,35 @@ return new class extends Migration
             $table->unique('tenant_id');
         });
 
-        // Add tracking fields to bookings
+        // Add tracking fields to bookings (only if they don't already exist)
         Schema::table('bookings', function (Blueprint $table) {
             // Pre-trip completion tracking
-            $table->boolean('medical_form_completed')->default(false);
-            $table->timestamp('medical_form_completed_at')->nullable();
-            $table->boolean('waiver_signed')->default(false);
-            $table->timestamp('waiver_signed_at')->nullable();
-            $table->boolean('pre_trip_info_sent')->default(false);
-            $table->boolean('check_in_reminder_sent')->default(false);
+            if (!Schema::hasColumn('bookings', 'medical_form_completed')) {
+                $table->boolean('medical_form_completed')->default(false);
+            }
+            if (!Schema::hasColumn('bookings', 'medical_form_completed_at')) {
+                $table->timestamp('medical_form_completed_at')->nullable();
+            }
+            if (!Schema::hasColumn('bookings', 'waiver_signed')) {
+                $table->boolean('waiver_signed')->default(false);
+            }
+            if (!Schema::hasColumn('bookings', 'waiver_signed_at')) {
+                $table->timestamp('waiver_signed_at')->nullable();
+            }
+            if (!Schema::hasColumn('bookings', 'pre_trip_info_sent')) {
+                $table->boolean('pre_trip_info_sent')->default(false);
+            }
+            if (!Schema::hasColumn('bookings', 'check_in_reminder_sent')) {
+                $table->boolean('check_in_reminder_sent')->default(false);
+            }
 
             // Post-trip tracking
-            $table->boolean('review_requested')->default(false);
-            $table->timestamp('review_requested_at')->nullable();
+            if (!Schema::hasColumn('bookings', 'review_requested')) {
+                $table->boolean('review_requested')->default(false);
+            }
+            if (!Schema::hasColumn('bookings', 'review_requested_at')) {
+                $table->timestamp('review_requested_at')->nullable();
+            }
         });
     }
 

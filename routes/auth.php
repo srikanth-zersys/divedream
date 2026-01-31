@@ -14,23 +14,26 @@ use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
-    // Multi-step tenant registration
+    // Multi-step tenant registration (rate limited to prevent abuse)
     Route::get('register', [TenantRegistrationController::class, 'showStep1'])
         ->name('register');
     Route::get('register/step-1', [TenantRegistrationController::class, 'showStep1'])
         ->name('register.step1');
     Route::post('register/step-1', [TenantRegistrationController::class, 'processStep1'])
-        ->name('register.step1.process');
+        ->name('register.step1.process')
+        ->middleware('throttle:forms');
 
     Route::get('register/step-2', [TenantRegistrationController::class, 'showStep2'])
         ->name('register.step2');
     Route::post('register/step-2', [TenantRegistrationController::class, 'processStep2'])
-        ->name('register.step2.process');
+        ->name('register.step2.process')
+        ->middleware('throttle:forms');
 
     Route::get('register/step-3', [TenantRegistrationController::class, 'showStep3'])
         ->name('register.step3');
     Route::post('register/step-3', [TenantRegistrationController::class, 'processStep3'])
-        ->name('register.step3.process');
+        ->name('register.step3.process')
+        ->middleware('throttle:forms');
 
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
@@ -41,19 +44,22 @@ Route::middleware('guest')->group(function () {
     Route::get('two-factor-challenge', [TwoFactorAuthController::class, 'challenge'])
         ->name('two-factor.challenge');
     Route::post('two-factor-challenge', [TwoFactorAuthController::class, 'verify'])
-        ->name('two-factor.verify');
+        ->name('two-factor.verify')
+        ->middleware('throttle:validation');
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
-        ->name('password.email');
+        ->name('password.email')
+        ->middleware('throttle:validation');
 
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
         ->name('password.reset');
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])
-        ->name('password.store');
+        ->name('password.store')
+        ->middleware('throttle:validation');
 });
 
 Route::middleware('auth')->group(function () {

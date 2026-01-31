@@ -179,31 +179,35 @@ return new class extends Migration
         });
 
         // Certification Types - Standard diving certifications
-        Schema::create('certification_types', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('tenant_id')->nullable()->constrained()->nullOnDelete();
+        // NOTE: This table may already exist from 2024_01_01_000005_create_certifications_table.php
+        // We skip creation if it already exists to avoid duplicate table error
+        if (!Schema::hasTable('certification_types')) {
+            Schema::create('certification_types', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('tenant_id')->nullable()->constrained()->nullOnDelete();
 
-            $table->string('name'); // e.g., "Open Water Diver", "Advanced Open Water"
-            $table->string('code', 50); // e.g., "PADI-OW", "SSI-AOW"
-            $table->string('organization')->nullable(); // PADI, SSI, NAUI, etc.
-            $table->integer('level')->default(1); // Hierarchy level
-            $table->text('description')->nullable();
+                $table->string('name'); // e.g., "Open Water Diver", "Advanced Open Water"
+                $table->string('code', 50); // e.g., "PADI-OW", "SSI-AOW"
+                $table->string('organization')->nullable(); // PADI, SSI, NAUI, etc.
+                $table->integer('level')->default(1); // Hierarchy level
+                $table->text('description')->nullable();
 
-            // Depth limits
-            $table->integer('max_depth_meters')->nullable();
+                // Depth limits
+                $table->integer('max_depth_meters')->nullable();
 
-            // Prerequisites
-            $table->json('prerequisites')->nullable(); // Array of certification codes
+                // Prerequisites
+                $table->json('prerequisites')->nullable(); // Array of certification codes
 
-            // Global or tenant-specific
-            $table->boolean('is_global')->default(false);
-            $table->boolean('is_active')->default(true);
+                // Global or tenant-specific
+                $table->boolean('is_global')->default(false);
+                $table->boolean('is_active')->default(true);
 
-            $table->timestamps();
+                $table->timestamps();
 
-            $table->unique(['tenant_id', 'code']);
-            $table->index('organization');
-        });
+                $table->unique(['tenant_id', 'code']);
+                $table->index('organization');
+            });
+        }
 
         // Booking Rules - Cut-off times, capacity, etc.
         Schema::create('booking_rules', function (Blueprint $table) {
@@ -264,8 +268,11 @@ return new class extends Migration
             $table->foreignId('default_cancellation_policy_id')->nullable()->constrained('cancellation_policies')->nullOnDelete();
         });
 
-        // Seed standard certification types
-        $this->seedCertificationTypes();
+        // Seed standard certification types only if table was just created
+        // (this prevents duplicate seeding and handles schema differences)
+        if (Schema::hasColumn('certification_types', 'organization')) {
+            $this->seedCertificationTypes();
+        }
     }
 
     public function down(): void

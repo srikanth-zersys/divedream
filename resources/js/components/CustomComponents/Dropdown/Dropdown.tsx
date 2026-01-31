@@ -1,4 +1,4 @@
-import React, { createContext, KeyboardEvent, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, KeyboardEvent, ReactNode, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from '@inertiajs/react';
 import { RootState } from '../../../slices/reducer';
@@ -14,6 +14,8 @@ interface DropdownProps {
   closeOnOutsideClick?: boolean;
   closeOnOutsideClickSidebar?: boolean;
   isActive ?: boolean | null;
+  /** Accessible label for the dropdown menu */
+  ariaLabel?: string;
 }
 
 interface DropdownContextProps {
@@ -24,6 +26,10 @@ interface DropdownContextProps {
   close: () => void;
   menuRef: React.RefObject<HTMLDivElement>;
   calculatePosition: () => void;
+  menuId: string;
+  buttonId: string;
+  focusedIndex: number;
+  setFocusedIndex: (index: number) => void;
 }
 
 const DropdownContext = createContext<DropdownContextProps | undefined>(
@@ -38,13 +44,18 @@ const Dropdown: React.FC<DropdownProps> = ({
   isActive,
   closeOnOutsideClick = true,
   closeOnOutsideClickSidebar = true,
+  ariaLabel,
 }) => {
   const { layoutType, layoutSidebar } = useSelector(
     (state: RootState) => state.Layout,
   );
   const [isOpen, setIsOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const baseId = useId();
+  const menuId = `${baseId}-menu`;
+  const buttonId = `${baseId}-button`;
 
   const handleToggle = useCallback(
     () => {
@@ -71,10 +82,16 @@ const Dropdown: React.FC<DropdownProps> = ({
       }
 
       if (trigger === "click") {
-        setIsOpen((prev) => !prev);
+        setIsOpen((prev) => {
+          if (!prev) {
+            // Opening - reset focus index
+            setFocusedIndex(-1);
+          }
+          return !prev;
+        });
       }
     },
-    [trigger],
+    [trigger, layoutType, layoutSidebar],
   );
 
   const handleMouseEnter = useCallback(() => {
@@ -89,11 +106,74 @@ const Dropdown: React.FC<DropdownProps> = ({
     }
   }, [trigger]);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      setIsOpen(false);
-    }
+  // Get all menu items for keyboard navigation
+  const getMenuItems = useCallback(() => {
+    if (!menuRef.current) return [];
+    return Array.from(menuRef.current.querySelectorAll<HTMLElement>(
+      '[role="menuitem"], .dropdown-item'
+    ));
   }, []);
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    const menuItems = getMenuItems();
+
+    switch (event.key) {
+      case 'Escape':
+        event.preventDefault();
+        setIsOpen(false);
+        setFocusedIndex(-1);
+        // Return focus to the trigger button
+        const button = document.getElementById(buttonId);
+        button?.focus();
+        break;
+
+      case 'ArrowDown':
+        event.preventDefault();
+        if (!isOpen) {
+          setIsOpen(true);
+          setFocusedIndex(0);
+        } else {
+          const newIndex = focusedIndex < menuItems.length - 1 ? focusedIndex + 1 : 0;
+          setFocusedIndex(newIndex);
+          menuItems[newIndex]?.focus();
+        }
+        break;
+
+      case 'ArrowUp':
+        event.preventDefault();
+        if (isOpen) {
+          const newIndex = focusedIndex > 0 ? focusedIndex - 1 : menuItems.length - 1;
+          setFocusedIndex(newIndex);
+          menuItems[newIndex]?.focus();
+        }
+        break;
+
+      case 'Home':
+        event.preventDefault();
+        if (isOpen && menuItems.length > 0) {
+          setFocusedIndex(0);
+          menuItems[0]?.focus();
+        }
+        break;
+
+      case 'End':
+        event.preventDefault();
+        if (isOpen && menuItems.length > 0) {
+          const lastIndex = menuItems.length - 1;
+          setFocusedIndex(lastIndex);
+          menuItems[lastIndex]?.focus();
+        }
+        break;
+
+      case 'Tab':
+        // Close dropdown and allow normal tab behavior
+        if (isOpen) {
+          setIsOpen(false);
+          setFocusedIndex(-1);
+        }
+        break;
+    }
+  }, [isOpen, focusedIndex, getMenuItems, buttonId]);
 
   const handleClickOutside = (event: any) => {
     if (
@@ -102,6 +182,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       !dropdownRef.current.contains(event.target)
     ) {
       setIsOpen(false);
+      setFocusedIndex(-1);
     }
   };
 
@@ -123,6 +204,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       !dropdownRef.current.contains(event.target)
     ) {
       setIsOpen(false);
+      setFocusedIndex(-1);
     }
   };
 
@@ -132,6 +214,20 @@ const Dropdown: React.FC<DropdownProps> = ({
       document.removeEventListener("click", handleClickOutsideSidebar);
     };
   }, []);
+
+  // Focus first menu item when menu opens
+  useEffect(() => {
+    if (isOpen && focusedIndex === -1) {
+      const menuItems = getMenuItems();
+      if (menuItems.length > 0) {
+        // Small delay to ensure menu is rendered
+        setTimeout(() => {
+          setFocusedIndex(0);
+          menuItems[0]?.focus();
+        }, 50);
+      }
+    }
+  }, [isOpen, focusedIndex, getMenuItems]);
 
   //function
   const getDefault = (buttonRect: DOMRect, dropdown: HTMLElement) => {
@@ -279,6 +375,7 @@ const Dropdown: React.FC<DropdownProps> = ({
 
   const close = useCallback(() => {
     setIsOpen(false);
+    setFocusedIndex(-1);
   }, []);
 
   return (
@@ -291,6 +388,10 @@ const Dropdown: React.FC<DropdownProps> = ({
         close,
         menuRef,
         calculatePosition,
+        menuId,
+        buttonId,
+        focusedIndex,
+        setFocusedIndex,
       }}
     >
       <div
@@ -312,12 +413,15 @@ interface DropdownButtonProps {
   colorClass?: string;
   arrow?: boolean;
   isActive?: boolean;
+  /** Accessible label for the dropdown button */
+  ariaLabel?: string;
 }
 
 const DropdownButton: React.FC<DropdownButtonProps> = ({
   children,
   colorClass,
   arrow,
+  ariaLabel,
 }) => {
   const context = useContext(DropdownContext);
 
@@ -325,16 +429,25 @@ const DropdownButton: React.FC<DropdownButtonProps> = ({
     throw new Error("DropdownButton must be used within a Dropdown");
   }
 
-  const { isOpen } = context;
+  const { isOpen, menuId, buttonId } = context;
 
   return (
-    <button className={`${colorClass}`} type="button">
+    <button
+      id={buttonId}
+      className={`${colorClass}`}
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded={isOpen}
+      aria-controls={isOpen ? menuId : undefined}
+      aria-label={ariaLabel}
+    >
       {children}
       {arrow && (
         <svg
           className={`size-5 arrow ${isOpen ? "transform rotate-180" : ""}`}
           viewBox="0 0 20 20"
           fill="currentColor"
+          aria-hidden="true"
         >
           <path
             fillRule="evenodd"
@@ -350,14 +463,16 @@ const DropdownButton: React.FC<DropdownButtonProps> = ({
 interface DropdownMenuProps {
   children: React.ReactNode;
   menuclass?: string;
-  // positionclass?: string;
   handleMenuClick?: (event: React.MouseEvent) => void;
+  /** Accessible label for the menu */
+  ariaLabel?: string;
 }
 
 const DropdownMenu: React.FC<DropdownMenuProps> = ({
   children,
   menuclass,
   handleMenuClick,
+  ariaLabel,
 }) => {
   const context = useContext(DropdownContext);
 
@@ -365,15 +480,19 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
     throw new Error("DropdownMenu must be used within a Dropdown");
   }
 
-  const { isOpen, menuRef } = context;
+  const { isOpen, menuRef, menuId, buttonId } = context;
 
   return (
     isOpen && (
       <div
+        id={menuId}
         ref={menuRef}
         className={`dropdown-menu ${menuclass}`}
         style={{ transition: "opacity 0.2s" }}
         onClick={handleMenuClick}
+        role="menu"
+        aria-labelledby={buttonId}
+        aria-label={ariaLabel}
       >
         {children}
       </div>
@@ -385,16 +504,39 @@ interface DropdownItemProps {
   children: React.ReactNode;
   href?: string;
   className?: string;
+  onClick?: () => void;
 }
 
 const DropdownItem: React.FC<DropdownItemProps> = ({
   children,
   href,
   className,
+  onClick,
 }) => {
+  const context = useContext(DropdownContext);
+
+  const handleClick = useCallback(() => {
+    onClick?.();
+    context?.close();
+  }, [onClick, context]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  }, [handleClick]);
+
   return (
-    <li>
-      <Link href={href || "#"} className={`dropdown-item ${className}`}>
+    <li role="presentation">
+      <Link
+        href={href || "#"}
+        className={`dropdown-item ${className || ''}`}
+        role="menuitem"
+        tabIndex={-1}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+      >
         {children}
       </Link>
     </li>
