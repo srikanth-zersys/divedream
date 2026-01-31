@@ -33,7 +33,7 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     //dashboard ( Not Required kept for later if so )
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 });
 
 require __DIR__ . '/auth.php';
