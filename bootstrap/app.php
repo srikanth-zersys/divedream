@@ -25,10 +25,8 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        // Alias middleware for route groups
+        // Register Spatie Permission middleware aliases
         $middleware->alias([
-            'tenant' => \App\Http\Middleware\EnsureTenantAccess::class,
-            'location' => \App\Http\Middleware\EnsureLocationAccess::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,

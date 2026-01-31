@@ -80,8 +80,8 @@ return [
         ],
 
         'teams' => [
-            'enabled' => env('HEALTH_TEAMS_ENABLED', true),
-            'webhook_url' => env('HEALTH_TEAMS_WEBHOOK_URL', 'https://default80dccbbef7834ec9a4e42d89790203.07.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c2dfc4dbc0d94b079752cb15d5d8d839/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=g59hxNXcjre-W27b9fZLulIVncQ9rgeRh2bnbWrP08s'),
+            'enabled' => env('HEALTH_TEAMS_ENABLED', false),
+            'webhook_url' => env('HEALTH_TEAMS_WEBHOOK_URL', ''),
         ],
     ],
 

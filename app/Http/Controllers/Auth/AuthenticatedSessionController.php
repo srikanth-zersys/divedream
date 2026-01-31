@@ -46,7 +46,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return Inertia::location(route('dashboard.index'));
+        return Inertia::location(route('dashboard'));
     }
 
     /**
