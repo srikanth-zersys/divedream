@@ -35,7 +35,7 @@ const Fivezerozero: NextPageWithLayout = () => {
                                 Our servers may have been abducted by Zersys... Please give us a
                                 moment while we search for them.
                             </p>
-                            <Link href="/dashboards/ecommerce" className="btn btn-primary">
+                            <Link href="/admin/dashboard" className="btn btn-primary">
                                 <Home className="inline-block size-4 ltr:mr-0.5 rtl:ml-0.5"></Home>{" "}
                                 <span className="align-middle">Back to Home</span>
                             </Link>

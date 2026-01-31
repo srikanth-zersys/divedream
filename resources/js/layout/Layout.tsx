@@ -10,6 +10,7 @@ import { changeHTMLAttribute, setNewThemeData } from '../slices/layout/utils';
 import { changeSidebarSize } from '../slices/thunk';
 import { MainMenu, MegaMenu, SubMenu } from '../dtos';
 import { menu } from '../data';
+import { FlashMessages } from '../components/ui/FlashMessages';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -115,6 +116,9 @@ const Layout = ({ children, breadcrumbTitle }: LayoutProps) => {
 
   return (
     <React.Fragment>
+      {/* Toast Notifications */}
+      <FlashMessages />
+
       {/* Main topbar */}
       {/* <Head> */}
       <title>{title}</title>
