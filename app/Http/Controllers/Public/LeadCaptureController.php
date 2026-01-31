@@ -276,8 +276,27 @@ class LeadCaptureController extends Controller
      */
     public function unsubscribe(Request $request, string $token): JsonResponse
     {
-        // Token could be lead ID encoded or a special unsubscribe token
-        $lead = Lead::where('id', base64_decode($token))->first();
+        // CRITICAL: Validate and sanitize the token before decoding
+        // Only allow valid base64 characters to prevent injection
+        if (!preg_match('/^[A-Za-z0-9+\/=]+$/', $token)) {
+            return response()->json(['error' => 'Invalid token format'], 400);
+        }
+
+        $decoded = base64_decode($token, true);
+
+        // Verify decoding succeeded and result is numeric (valid lead ID)
+        if ($decoded === false || !ctype_digit($decoded)) {
+            return response()->json(['error' => 'Invalid token'], 400);
+        }
+
+        $leadId = (int) $decoded;
+
+        // Additional check: ensure ID is within reasonable bounds
+        if ($leadId <= 0 || $leadId > PHP_INT_MAX) {
+            return response()->json(['error' => 'Invalid token'], 400);
+        }
+
+        $lead = Lead::find($leadId);
 
         if (!$lead) {
             return response()->json(['error' => 'Invalid token'], 404);

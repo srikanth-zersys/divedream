@@ -270,11 +270,18 @@ class MemberController extends Controller
     {
         $this->authorize('delete', $member);
 
-        // Check if member has any bookings
-        if ($member->bookings()->exists()) {
-            return back()->with('error', 'Cannot delete member with existing bookings. Consider deactivating instead.');
+        // CRITICAL: Check if member has ACTIVE bookings (not cancelled/completed/no_show)
+        if ($member->hasActiveBookings()) {
+            $count = $member->getActiveBookingsCount();
+            return back()->with('error', "Cannot delete member with {$count} active booking(s). Cancel or complete them first, or deactivate the member instead.");
         }
 
+        // Also check for pending payments
+        if ($member->hasPendingPayments()) {
+            return back()->with('error', 'Cannot delete member with outstanding payments. Settle all payments first, or deactivate the member instead.');
+        }
+
+        // Soft delete allows recovery if needed
         $member->delete();
 
         return redirect()

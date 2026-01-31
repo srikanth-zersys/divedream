@@ -194,4 +194,38 @@ class Schedule extends Model
 
         return $instructors;
     }
+
+    /**
+     * CRITICAL: Check if schedule has active bookings before allowing deletion
+     * Prevents orphaning bookings when schedule is deleted
+     */
+    public function hasActiveBookings(): bool
+    {
+        return $this->bookings()
+            ->whereNotIn('status', ['cancelled', 'no_show', 'completed'])
+            ->exists();
+    }
+
+    /**
+     * Get count of active bookings
+     */
+    public function getActiveBookingsCount(): int
+    {
+        return $this->bookings()
+            ->whereNotIn('status', ['cancelled', 'no_show', 'completed'])
+            ->count();
+    }
+
+    /**
+     * CRITICAL: Safe delete that checks for active bookings first
+     * Returns false if deletion was blocked
+     */
+    public function safeDelete(): bool
+    {
+        if ($this->hasActiveBookings()) {
+            return false;
+        }
+
+        return (bool) $this->delete();
+    }
 }

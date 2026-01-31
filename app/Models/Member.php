@@ -208,4 +208,49 @@ class Member extends Model
             ]);
         }
     }
+
+    /**
+     * CRITICAL: Check if member has active bookings before allowing deletion
+     * Prevents orphaning bookings when member is deleted
+     */
+    public function hasActiveBookings(): bool
+    {
+        return $this->bookings()
+            ->whereNotIn('status', ['cancelled', 'no_show', 'completed'])
+            ->exists();
+    }
+
+    /**
+     * Get count of active bookings
+     */
+    public function getActiveBookingsCount(): int
+    {
+        return $this->bookings()
+            ->whereNotIn('status', ['cancelled', 'no_show', 'completed'])
+            ->count();
+    }
+
+    /**
+     * Check if member has any pending payments
+     */
+    public function hasPendingPayments(): bool
+    {
+        return $this->bookings()
+            ->where('balance_due', '>', 0)
+            ->whereNotIn('status', ['cancelled'])
+            ->exists();
+    }
+
+    /**
+     * CRITICAL: Safe delete that checks for active bookings first
+     * Returns false if deletion was blocked
+     */
+    public function safeDelete(): bool
+    {
+        if ($this->hasActiveBookings()) {
+            return false;
+        }
+
+        return (bool) $this->delete();
+    }
 }

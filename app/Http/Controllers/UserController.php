@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\TenantService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -13,11 +14,21 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    public function __construct(
+        protected TenantService $tenantService
+    ) {}
 
     public function userManagement(Request $request)
     {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        if (!$tenant) {
+            abort(403, 'No tenant context');
+        }
+
         $roles = Role::orderBy('name')->get(['id', 'name']);
         $users_query = User::with('roles')
+            ->where('tenant_id', $tenant->id) // CRITICAL: Filter by tenant
             ->when($request->input('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
@@ -45,6 +56,12 @@ class UserController extends Controller
 
     public function addUser()
     {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        if (!$tenant) {
+            abort(403, 'No tenant context');
+        }
+
         $roles = Role::orderBy('name')->get(['id', 'name']);
         return Inertia::render('page/user-management/add-user', [
             'roles' => $roles
@@ -53,8 +70,18 @@ class UserController extends Controller
 
     public function EditUser($id)
     {
-        $user = User::with('roles')->find($id);
-        if(!$user){
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        if (!$tenant) {
+            abort(403, 'No tenant context');
+        }
+
+        // CRITICAL: Only allow editing users from same tenant
+        $user = User::with('roles')
+            ->where('tenant_id', $tenant->id)
+            ->find($id);
+
+        if (!$user) {
             return back()->withErrors([
                 'message' => 'User not found.',
             ]);
@@ -66,7 +93,14 @@ class UserController extends Controller
         ]);
     }
 
-    public function store(Request $request){
+    public function store(Request $request)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        if (!$tenant) {
+            abort(403, 'No tenant context');
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|min:3|max:255',
             'email' => 'required|email|unique:users,email|max:255',
@@ -79,14 +113,15 @@ class UserController extends Controller
         }
         try {
             $user = User::create([
+                'tenant_id' => $tenant->id, // CRITICAL: Assign tenant_id
                 'name'     => $request->input('name'),
-                'email'    => $request->input('email'),
+                'email'    => strtolower(trim($request->input('email'))), // Normalize email
                 'phone'    => $request->input('phone'),
                 'password' => Hash::make($request->input('password')),
             ]);
             $user->assignRole($request->input('role'));
-       return redirect()->route('users.create')->with('success', 'User created successfully!');
-        } catch (Exception $e){
+            return redirect()->route('users.create')->with('success', 'User created successfully!');
+        } catch (Exception $e) {
             report($e);
             return back()->withErrors([
                 'message' => 'An unexpected error occurred during registration. Please try again.',
@@ -94,10 +129,27 @@ class UserController extends Controller
         }
     }
 
-    public function update(Request $request){
+    public function update(Request $request)
+    {
+        $tenant = $this->tenantService->getCurrentTenant();
+
+        if (!$tenant) {
+            abort(403, 'No tenant context');
+        }
+
         $id = $request->input('id');
+
+        // CRITICAL: Verify user belongs to tenant before updating
+        $user = User::where('tenant_id', $tenant->id)->find($id);
+
+        if (!$user) {
+            return back()->withErrors([
+                'message' => 'User not found.',
+            ])->withInput();
+        }
+
         $validator = Validator::make($request->all(), [
-           'name' => [
+            'name' => [
                 'required',
                 'string',
                 'min:3',
@@ -123,14 +175,8 @@ class UserController extends Controller
             return back()->withErrors($validator)->withInput();
         }
         try {
-            $user = User::findOrFail($id);
-            if(!$user){
-                return back()->withErrors([
-                    'message' => 'User not found.',
-                ])->withInput();
-            }
             $user->name = $request->input('name');
-            $user->email = $request->input('email');
+            $user->email = strtolower(trim($request->input('email'))); // Normalize email
             $user->phone = $request->input('phone');
             $user->status = $request->input('status');
             if ($request->filled('password')) {
@@ -138,13 +184,12 @@ class UserController extends Controller
             }
             $user->save();
             $user->syncRoles($request->input('role'));
-           return redirect()->route('users.edit', $user->id)->with('success', 'User updated successfully!');
-        } catch (Exception $e){
+            return redirect()->route('users.edit', $user->id)->with('success', 'User updated successfully!');
+        } catch (Exception $e) {
             report($e);
             return back()->withErrors([
                 'message' => 'An unexpected error occurred during registration. Please try again.',
             ])->withInput();
         }
     }
-
 }

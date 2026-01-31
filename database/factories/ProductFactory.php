@@ -32,7 +32,7 @@ class ProductFactory extends Factory
             'price' => fake()->randomFloat(2, 50, 1000),
             'duration_minutes' => fake()->randomElement([60, 120, 180, 240, 480]),
             'max_participants' => fake()->numberBetween(2, 10),
-            'is_active' => true,
+            'status' => 'active',
         ];
     }
 }

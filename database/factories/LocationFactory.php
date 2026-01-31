@@ -15,13 +15,17 @@ class LocationFactory extends Factory
         return [
             'tenant_id' => Tenant::factory(),
             'name' => fake()->company() . ' Dive Center',
-            'address' => fake()->address(),
+            'slug' => fake()->unique()->slug(),
+            'address_line_1' => fake()->streetAddress(),
+            'address_line_2' => fake()->optional(0.3)->secondaryAddress(),
             'city' => fake()->city(),
-            'country' => fake()->country(),
+            'state' => fake()->optional(0.7)->state(),
+            'postal_code' => fake()->postcode(),
+            'country' => fake()->countryCode(),
             'latitude' => fake()->latitude(),
             'longitude' => fake()->longitude(),
             'phone' => fake()->phoneNumber(),
-            'email' => fake()->email(),
+            'email' => fake()->safeEmail(),
             'is_active' => true,
         ];
     }

@@ -298,6 +298,15 @@ class Booking extends Model
 
     public function checkIn(?int $userId = null): void
     {
+        // CRITICAL: Explicitly reject cancelled/no_show/completed bookings
+        $disallowedStatuses = ['cancelled', 'no_show', 'completed'];
+        if (in_array($this->status, $disallowedStatuses)) {
+            throw new \InvalidArgumentException(
+                "Cannot check in a booking with status '{$this->status}'. Only pending or confirmed bookings can be checked in."
+            );
+        }
+
+        // Only allow confirmed and pending bookings
         if (!in_array($this->status, ['confirmed', 'pending'])) {
             throw new \InvalidArgumentException('Only confirmed or pending bookings can be checked in.');
         }

@@ -19,12 +19,12 @@ class MemberFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'phone' => fake()->phoneNumber(),
             'date_of_birth' => fake()->date('Y-m-d', '-18 years'),
-            'certification_level' => fake()->randomElement(['Open Water', 'Advanced', 'Rescue', 'Divemaster', 'Instructor']),
-            'certification_agency' => fake()->randomElement(['PADI', 'SSI', 'NAUI', 'BSAC']),
+            'gender' => fake()->optional(0.8)->randomElement(['male', 'female', 'other']),
             'total_dives' => fake()->numberBetween(0, 500),
             'emergency_contact_name' => fake()->name(),
             'emergency_contact_phone' => fake()->phoneNumber(),
-            'is_active' => true,
+            'emergency_contact_relationship' => fake()->randomElement(['spouse', 'parent', 'sibling', 'friend']),
+            'status' => 'active',
         ];
     }
 }

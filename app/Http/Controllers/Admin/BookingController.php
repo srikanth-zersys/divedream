@@ -149,6 +149,30 @@ class BookingController extends Controller
         try {
             // Use database transaction with pessimistic locking to prevent overbooking
             $booking = \DB::transaction(function () use ($tenant, $location, $validated) {
+                // CRITICAL: Check for duplicate booking prevention
+                if ($validated['member_id']) {
+                    $existingBooking = Booking::forTenant($tenant->id)
+                        ->where('member_id', $validated['member_id'])
+                        ->whereNotIn('status', ['cancelled', 'no_show'])
+                        ->where(function ($q) use ($validated) {
+                            // Check for same schedule OR same product on same date
+                            if (isset($validated['schedule_id'])) {
+                                $q->where('schedule_id', $validated['schedule_id']);
+                            } else {
+                                $q->where('product_id', $validated['product_id'])
+                                  ->where('booking_date', $validated['booking_date']);
+                            }
+                        })
+                        ->first();
+
+                    if ($existingBooking) {
+                        throw new \Exception(
+                            "This member already has an active booking (#{$existingBooking->booking_number}) " .
+                            "for this " . (isset($validated['schedule_id']) ? 'schedule' : 'date and product') . "."
+                        );
+                    }
+                }
+
                 // Create new member if needed
                 if (!$validated['member_id'] && isset($validated['new_member'])) {
                     $member = Member::create([

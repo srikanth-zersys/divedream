@@ -478,11 +478,13 @@ class ScheduleController extends Controller
     {
         $this->authorize('delete', $schedule);
 
-        // Check if schedule has bookings
-        if ($schedule->bookings()->exists()) {
-            return back()->with('error', 'Cannot delete schedule with existing bookings. Consider cancelling instead.');
+        // CRITICAL: Check if schedule has ACTIVE bookings (not cancelled/completed/no_show)
+        if ($schedule->hasActiveBookings()) {
+            $count = $schedule->getActiveBookingsCount();
+            return back()->with('error', "Cannot delete schedule with {$count} active booking(s). Cancel or complete them first, or cancel the schedule instead.");
         }
 
+        // Soft delete also allows recovery if needed
         $schedule->delete();
 
         return redirect()
