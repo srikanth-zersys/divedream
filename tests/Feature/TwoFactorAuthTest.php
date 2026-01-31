@@ -135,7 +135,7 @@ class TwoFactorAuthTest extends TestCase
             'code' => $validCode,
         ]);
 
-        $response->assertRedirect(route('dashboard'));
+        $response->assertRedirect(route('dashboard.index'));
         $this->assertAuthenticatedAs($this->user);
     }
 
@@ -162,7 +162,7 @@ class TwoFactorAuthTest extends TestCase
             'code' => 'aaaa-bbbb-cccc',
         ]);
 
-        $response->assertRedirect(route('dashboard'));
+        $response->assertRedirect(route('dashboard.index'));
         $this->assertAuthenticatedAs($this->user);
 
         // Verify recovery code was consumed

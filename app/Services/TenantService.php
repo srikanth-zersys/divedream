@@ -233,7 +233,7 @@ class TenantService
         $tenant = $this->getCurrentTenant();
 
         if (!$tenant) {
-            return collect();
+            return new \Illuminate\Database\Eloquent\Collection();
         }
 
         if (!auth()->check()) {
